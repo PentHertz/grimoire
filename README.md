@@ -84,8 +84,7 @@ Curated in [`sources.yaml`](sources.yaml), grouped by category:
 Install as a CLI with pipx (recommended) or pip - this puts `grimoire` on your PATH:
 
 ```bash
-pipx install grimoire-docs            # or: pipx install .   (from a checkout)
-pipx install "grimoire-docs[render]"  # + python-markdown for prettier doc rendering
+pipx install .           # (from a checkout)
 
 grimoire all                          # clone every source + build the index
 grimoire serve                        # http://127.0.0.1:8000
