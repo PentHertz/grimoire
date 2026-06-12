@@ -1,0 +1,40 @@
+# Grimoire engagement context (example).
+# Copy to context.yaml, fill in YOUR assessment, then launch:
+#   grimoire.py mcp --context context.yaml
+# The attached AI model reads this (grimoire_context tool) and tailors every
+# checklist / tutorial / command to these targets and hardware.
+# Do NOT put secrets here that you would not want the model to see.
+
+engagement: "Example external assessment"
+authorization: "SOW-0000 (reminder only - keep your written authorization)"
+
+# Targets / scope. These also become the allowlist for exec mode (when enabled).
+targets:
+  - 10.0.0.0/24
+  - app.example.test
+  - 192.168.1.50
+
+# Relevant network interfaces (the model will use these in commands).
+interfaces:
+  - eth0
+  - wlan0mon
+
+# Hardware / SDR / RF gear in use.
+hardware:
+  - HackRF One
+  - Proxmark3 RDV4
+  - "Alfa AWUS036ACM (wlan1)"
+
+# Telecom / SIM context (for GSM/LTE/5G work).
+sim:
+  operator: "Test PLMN 001-01"
+  imsi: "001010000000001"
+  type: sysmoUSIM
+
+# RF parameters of interest.
+rf:
+  bands: ["GSM900", "LTE B3"]
+  freq: "2.412GHz"
+
+# Free-form rules of engagement the model must respect.
+notes: "No DoS. Business hours only. Report findings against ISO 27001 Annex A."

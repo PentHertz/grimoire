@@ -1,0 +1,718 @@
+# Grimoire source manifest.
+#
+# Each entry is cloned by `grimoire.py fetch` into data/sources/<name>, optionally
+# built by `grimoire.py build` (per `build:` adapter), and indexed for search by
+# `grimoire.py index`.
+#
+# Fields:
+#   name      : unique slug (also the clone dir name)
+#   title     : human label shown in the UI
+#   repo      : git URL (omit for type: local)
+#   category  : grouping shown/filtered in the UI
+#   build     : native build system (mdbook|mkdocs|jekyll|hugo|markdown)
+#   docs_dir  : (optional) subdir to index/build; default = whole repo
+#   sparse    : (optional) list of paths to sparse-checkout for huge repos
+#   org       : (optional) GitHub org/user - clones every public repo
+#   pdf_url   : (optional) direct PDF URL to download and index (needs pdftotext)
+#   index_ext : (optional) extra file extensions to index, e.g. [.json] [.ipynb]
+#
+# To add your own docs: drop markdown into ./custom/ (auto-indexed), or add a
+# `type: local` entry here pointing at a path.
+
+sources:
+
+  # ---- Broad aggregate wikis ---------------------------------------
+  - name: hacktricks
+    title: HackTricks
+    repo: https://github.com/HackTricks-wiki/hacktricks
+    category: wikis
+    type: local
+    path: /tmp/gt/ht
+  - name: hacktricks-cloud
+    title: HackTricks Cloud
+    repo: https://github.com/HackTricks-wiki/hacktricks-cloud
+    category: wikis
+    build: mdbook
+  - name: payloadsallthethings
+    title: PayloadsAllTheThings
+    repo: https://github.com/swisskyrepo/PayloadsAllTheThings
+    category: wikis
+    build: markdown
+  - name: pentest-book
+    title: six2dez Pentest Book
+    repo: https://github.com/six2dez/pentest-book
+    category: wikis
+    build: mkdocs
+  - name: the-hacker-recipes
+    title: The Hacker Recipes
+    repo: https://github.com/ShutdownRepo/the-hacker-recipes
+    category: wikis
+    build: mdbook
+
+  # ---- Active Directory / internal ---------------------------------
+  - name: internalallthethings
+    title: InternalAllTheThings
+    repo: https://github.com/swisskyrepo/InternalAllTheThings
+    category: ad-internal
+    build: mkdocs
+  - name: ired-team
+    title: ired.team (RedTeaming Tactics)
+    repo: https://github.com/mantvydasb/RedTeaming-Tactics-and-Techniques
+    category: ad-internal
+    build: markdown
+  - name: ocd-mindmaps
+    title: OCD mindmaps
+    repo: https://github.com/Orange-Cyberdefense/ocd-mindmaps
+    category: ad-internal
+    build: markdown   # mostly visual mindmaps (svg/drawio); only md/README is indexed
+
+  # ---- Hardware / IoT ----------------------------------------------
+  - name: hardwareallthethings
+    title: HardwareAllTheThings
+    repo: https://github.com/swisskyrepo/HardwareAllTheThings
+    category: hardware-iot
+    build: mkdocs
+  - name: proxmark3
+    title: Proxmark3 (RRG/Iceman docs)
+    repo: https://github.com/RfidResearchGroup/proxmark3
+    category: hardware-iot
+    build: markdown
+    docs_dir: doc
+    sparse: [doc]   # huge repo (firmware+client); sparse-checkout only the doc/ tree
+
+  # ---- Mobile ------------------------------------------------------
+  - name: owasp-mastg
+    title: OWASP MASTG
+    repo: https://github.com/OWASP/owasp-mastg
+    category: mobile
+    build: mkdocs
+  - name: owasp-masvs
+    title: OWASP MASVS
+    repo: https://github.com/OWASP/owasp-masvs
+    category: mobile
+    build: mkdocs
+
+  # ---- Web / API ---------------------------------------------------
+  - name: owasp-api-security
+    title: OWASP API Security Top 10
+    repo: https://github.com/OWASP/API-Security
+    category: web-api
+    build: markdown
+  - name: owasp-asvs
+    title: OWASP ASVS
+    repo: https://github.com/OWASP/ASVS
+    category: web-api
+    build: markdown
+  - name: owasp-cheatsheets
+    title: OWASP Cheat Sheet Series
+    repo: https://github.com/OWASP/CheatSheetSeries
+    category: web-api
+    build: mkdocs
+  - name: owasp-wstg
+    title: OWASP WSTG
+    repo: https://github.com/OWASP/wstg
+    category: web-api
+    build: markdown
+
+  # ---- Living-off-the-land databases -------------------------------
+  - name: gtfoargs
+    title: GTFOArgs
+    repo: https://github.com/GTFOArgs/gtfoargs.github.io
+    category: lotl
+    build: jekyll
+    docs_dir: _gtfoargs
+  - name: gtfobins
+    title: GTFOBins
+    repo: https://github.com/GTFOBins/GTFOBins.github.io
+    category: lotl
+    build: jekyll
+    docs_dir: _gtfobins
+  - name: lolbas
+    title: LOLBAS
+    repo: https://github.com/LOLBAS-Project/LOLBAS
+    category: lotl
+    build: jekyll
+    docs_dir: yml
+  - name: loldrivers
+    title: LOLDrivers
+    repo: https://github.com/magicsword-io/LOLDrivers
+    category: lotl
+    build: hugo
+    docs_dir: yaml
+  - name: loobins
+    title: LOOBins
+    repo: https://github.com/infosecB/LOOBins
+    category: lotl
+    build: hugo
+    docs_dir: LOOBins
+  - name: wadcoms
+    title: WADComs
+    repo: https://github.com/WADComs/WADComs.github.io
+    category: lotl
+    build: jekyll
+    docs_dir: _wadcoms
+
+  # ---- Reverse engineering: free books / courses -------------------
+  - name: how2heap
+    title: how2heap (heap exploitation)
+    repo: https://github.com/shellphish/how2heap
+    category: re-books
+    build: markdown
+    # OpenSecurityTraining2 (ost2.fyi): classes are distributed per-class but are NOT
+    # currently enumerable as public repos under one discoverable GitHub account
+    # (ost2 / opensecuritytraining have 0 public repos as of this writing). The
+    # `org:` mechanism is ready - uncomment and set `org:` to the right handle, or
+    # add individual class repos as their own `repo:` entries, once known:
+    # - name: ost2
+    #   title: OpenSecurityTraining2 (courses)
+    #   org: <github-handle>
+    #   category: re-books
+    #   build: markdown
+  - name: mytechnotalent-re
+    title: Reverse Engineering (mytechnotalent)
+    repo: https://github.com/mytechnotalent/Reverse-Engineering
+    category: re-books
+    build: markdown
+  - name: nightmare
+    title: Nightmare (binary exploitation / RE)
+    repo: https://github.com/guyinatuxedo/nightmare
+    category: re-books
+    build: markdown
+  # Reverse Engineering for Beginners (Yurichev): beginners.re/RE4B-EN.pdf now
+  # 302-redirects to a paywall, so it is not auto-downloaded. Drop the PDF into
+  # ./custom/ (indexed via pdftotext) or point a type:local entry at it.
+  # OpenSecurityTraining2 (ost2.fyi): classes are per-repo and not enumerable
+  # under one public GitHub account; add individual class repos or set `org:`.
+
+  # ---- Reverse engineering: tool docs that double as references ----
+  - name: angr-doc
+    title: angr docs (symbolic execution)
+    repo: https://github.com/angr/angr-doc
+    category: re-tools
+    build: markdown
+  - name: ghidra
+    title: Ghidra (in-tree docs)
+    repo: https://github.com/NationalSecurityAgency/ghidra
+    category: re-tools
+    build: markdown
+    docs_dir: GhidraDocs
+    sparse: [GhidraDocs]   # huge repo; sparse-checkout only the docs
+  - name: radare2book
+    title: radare2 book
+    repo: https://github.com/radareorg/radare2book
+    category: re-tools
+    build: mdbook
+  - name: rizin-book
+    title: rizin book
+    repo: https://github.com/rizinorg/rizin-book
+    category: re-tools
+    build: mdbook
+
+  # ---- Reverse engineering: awesome indexes ------------------------
+  - name: awesome-android-re
+    title: Awesome Android Reverse Engineering
+    repo: https://github.com/user1342/Awesome-Android-Reverse-Engineering
+    category: re-indexes
+    build: markdown
+  - name: awesome-malware-analysis
+    title: Awesome Malware Analysis
+    repo: https://github.com/rshipp/awesome-malware-analysis
+    category: re-indexes
+    build: markdown
+  - name: awesome-reversing
+    title: Awesome-Reversing (ReversingID)
+    repo: https://github.com/ReversingID/Awesome-Reversing
+    category: re-indexes
+    build: markdown
+  - name: awesome-reversing-tylerha97
+    title: awesome-reversing (tylerha97)
+    repo: https://github.com/tylerha97/awesome-reversing
+    category: re-indexes
+    build: markdown
+  - name: reverse-engineering-wtsxdev
+    title: reverse-engineering (wtsxDev)
+    repo: https://github.com/wtsxDev/reverse-engineering
+    category: re-indexes
+    build: markdown
+
+  # ---- Firmware ----------------------------------------------------
+  - name: awesome-firmware-security
+    title: Awesome Firmware Security
+    repo: https://github.com/PreOS-Security/awesome-firmware-security
+    category: firmware
+    build: markdown
+
+  # ---- OSINT -------------------------------------------------------
+  - name: awesome-osint
+    title: awesome-osint (jivoi)
+    repo: https://github.com/jivoi/awesome-osint
+    category: osint
+    build: markdown
+  - name: awesome-osint-list
+    title: Awesome OSINT List (Astrosp)
+    repo: https://github.com/Astrosp/Awesome-OSINT-List
+    category: osint
+    build: markdown
+  - name: osint-collection
+    title: OSINT Collection (Ph055a)
+    repo: https://github.com/Ph055a/OSINT_Collection
+    category: osint
+    build: markdown           # archived upstream, still a useful frozen index
+  - name: osint-framework
+    title: OSINT Framework (clickable tool tree)
+    repo: https://github.com/lockfale/OSINT-Framework
+    category: osint
+    build: markdown
+    docs_dir: public          # the ~700-tool tree lives in public/arf.json
+    index_ext: [.json]        # index the JSON so the tools are searchable
+  - name: osint-stuff-tool-collection
+    title: OSINT stuff tool collection (cipher387)
+    repo: https://github.com/cipher387/osint_stuff_tool_collection
+    category: osint
+    build: markdown
+  - name: sinwindie-osint
+    title: OSINT by target type + workflows (sinwindie)
+    repo: https://github.com/sinwindie/OSINT
+    category: osint
+    build: markdown
+  - name: tracelabs-awesome-osint
+    title: Trace Labs awesome-osint (missing persons)
+    repo: https://github.com/tracelabs/awesome-osint
+    category: osint
+    build: markdown
+
+  # ---- DFIR / forensics / incident response ------------------------
+  - name: awesome-forensics
+    title: awesome-forensics (cugu)
+    repo: https://github.com/cugu/awesome-forensics
+    category: dfir
+    build: markdown
+  - name: awesome-incident-response
+    title: Awesome Incident Response (meirwah)
+    repo: https://github.com/meirwah/awesome-incident-response
+    category: dfir
+    build: markdown
+  - name: awesome-memory-forensics
+    title: Awesome Memory Forensics (digitalisx)
+    repo: https://github.com/digitalisx/awesome-memory-forensics
+    category: dfir
+    build: markdown
+  - name: cert-irm
+    title: CERT Societe Generale IRM (IR playbooks)
+    repo: https://github.com/certsocietegenerale/IRM
+    category: dfir
+    build: markdown
+  - name: dissect
+    title: Dissect (DFIR framework, NCC Group)
+    repo: https://github.com/fox-it/dissect
+    category: dfir
+    build: markdown
+    # Mobile DFIR: abrignoni/iLEAPP (~175 MB) and abrignoni/ALEAPP are Python
+    # artifact PARSERS, not markdown docs, so they add little to a text index for a
+    # large clone. The artifact "where things live" catalog is better covered by
+    # forensicartifacts above. Add them as `repo:` entries if you want them anyway.
+    #
+    # Writeups/posters (The DFIR Report, AboutDFIR, SANS DFIR posters) are hosted
+    # sites/PDFs, not clean repos - drop PDFs into ./custom/ to index them.
+  - name: forensicartifacts
+    title: ForensicArtifacts (artifact knowledge base)
+    repo: https://github.com/ForensicArtifacts/artifacts
+    category: dfir
+    build: markdown          # YAML artifact KB (.yaml indexed by default)
+  - name: ir-plan-template
+    title: Incident Response Plan template (counteractive)
+    repo: https://github.com/counteractive/incident-response-plan-template
+    category: dfir
+    build: markdown
+  - name: kapefiles
+    title: KapeFiles (KAPE Targets/Modules)
+    repo: https://github.com/EricZimmerman/KapeFiles
+    category: dfir
+    build: markdown
+    index_ext: [.tkape, .mkape]   # KAPE target/module definitions (YAML format)
+  - name: pagerduty-ir
+    title: PagerDuty Incident Response docs
+    repo: https://github.com/PagerDuty/incident-response-docs
+    category: dfir
+    build: markdown          # NOTE: large repo (~170 MB working tree)
+  - name: plaso
+    title: plaso / log2timeline (super-timeline docs)
+    repo: https://github.com/log2timeline/plaso
+    category: dfir
+    build: markdown
+    docs_dir: docs
+    sparse: [docs]           # huge repo (test data); sparse-checkout only docs/
+  - name: velociraptor
+    title: Velociraptor (VQL artifact docs)
+    repo: https://github.com/Velocidex/velociraptor
+    category: dfir
+    build: markdown
+    docs_dir: docs
+    sparse: [docs]           # huge repo (Go source); sparse-checkout only docs/
+  - name: volatility3
+    title: Volatility 3 (memory forensics docs)
+    repo: https://github.com/volatilityfoundation/volatility3
+    category: dfir
+    build: markdown
+    index_ext: [.rst]        # sphinx plugin docs
+
+  # ---- Fault injection / glitching ---------------------------------
+  - name: chipshouter-picoemp
+    title: ChipSHOUTER-PicoEMP (open-source EMFI)
+    repo: https://github.com/newaetech/chipshouter-picoemp
+    category: glitching
+    build: markdown
+    index_ext: [.ipynb]
+  - name: chipwhisperer
+    title: ChipWhisperer (docs)
+    repo: https://github.com/newaetech/chipwhisperer
+    category: glitching
+    build: markdown
+    docs_dir: docs
+    sparse: [docs]            # huge repo; sparse-checkout only docs/
+    index_ext: [.rst]
+  - name: chipwhisperer-jupyter
+    title: ChipWhisperer Jupyter (Fault101/201 courses)
+    repo: https://github.com/newaetech/chipwhisperer-jupyter
+    category: glitching
+    build: markdown
+    index_ext: [.ipynb]       # course notebooks (clock/voltage glitching, ext_offset)
+  - name: fault-injection-library
+    title: findus / fault-injection-library (PicoGlitcher + ChipWhisperer)
+    repo: https://github.com/MKesenheimer/fault-injection-library
+    category: glitching
+    build: markdown
+    docs_dir: docs
+    sparse: [docs]            # huge repo (firmware/projects); sparse-checkout docs/
+    index_ext: [.rst]         # readthedocs sources
+  - name: faultycat
+    title: Faulty Cat (PicoEMP remix, EMFI + crowbar)
+    repo: https://github.com/ElectronicCats/faultycat
+    category: glitching
+    build: markdown           # incl. docs/GLITCHING.md
+  - name: picoglitcher-lpc1343
+    title: PicoGlitcher LPC1343 CRP (SySS)
+    repo: https://github.com/SySS-Research/picoglitcher-lpc1343
+    category: glitching
+    build: markdown
+    # FI methodology writeups (Raelize, Synacktiv, SySS blog, Limited Results, the
+    # PicoEMP eprint 2023/1195, the "Glitching in 3D" BOOTSTRAP24 release) are
+    # hosted articles/PDFs, not clean repos -> drop PDFs into ./custom/. The
+    # Hardware Hacking Handbook (van Woudenberg & O'Flynn) is a paid book.
+  - name: simplelink-fi
+    title: SimpleLink-FI (CC2652R1 VFI/SCA/EMFI course)
+    repo: https://github.com/KULeuven-COSIC/SimpleLink-FI
+    category: glitching
+    build: markdown
+    index_ext: [.ipynb]
+
+  # ---- Bluetooth security ------------------------------------------
+  - name: apple_bleee
+    title: apple_bleee (Apple BLE advertisement leaks)
+    repo: https://github.com/hexway/apple_bleee
+    category: bluetooth
+    build: markdown
+  - name: awesome-bluetooth-security
+    title: awesome-bluetooth-security (engn33r)
+    repo: https://github.com/engn33r/awesome-bluetooth-security
+    category: bluetooth
+    build: markdown
+  - name: bias
+    title: BIAS attack (PoC)
+    repo: https://github.com/francozappa/bias
+    category: bluetooth
+    build: markdown
+  - name: ble_ctf
+    title: BLE CTF (ESP32 GATT attack drills)
+    repo: https://github.com/hackgnar/ble_ctf
+    category: bluetooth
+    build: markdown
+    # InjectaBLE (Cayre BLE connection-injection) has no resolvable standalone repo
+    # (RCayre/injectable is 404); its technique lives alongside mirage above.
+    # Bluetooth Core Spec (bluetooth.com/specifications) and Google Fast Pair spec
+    # (developers.google.com) are gated/hosted, not repos -> drop the PDFs into
+    # ./custom/ to index them (the spec is the reference for KNOB/BIAS/BLUFFS).
+  - name: bleah
+    title: bleah (BLE MitM/recon)
+    repo: https://github.com/evilsocket/bleah
+    category: bluetooth
+    build: markdown
+  - name: bluetoolkit
+    title: BlueToolkit (BR/EDR test framework + vuln catalog)
+    repo: https://github.com/sgxgsx/BlueToolkit
+    category: bluetooth
+    build: markdown
+  - name: bluffs
+    title: BLUFFS attack (PoC)
+    repo: https://github.com/francozappa/bluffs
+    category: bluetooth
+    build: markdown
+  - name: braktooth
+    title: BrakTooth (BR/EDR attack family PoCs + ESP32 sniffer)
+    repo: https://github.com/Matheus-Garbelini/braktooth_esp32_bluetooth_classic_attacks
+    category: bluetooth
+    build: markdown
+  - name: btlejack
+    title: BtleJack (BLE sniff/jam/hijack, Micro:bit)
+    repo: https://github.com/virtualabs/btlejack
+    category: bluetooth
+    build: markdown
+  - name: continuity
+    title: Apple Continuity protocol dissection (furiousMAC)
+    repo: https://github.com/furiousMAC/continuity
+    category: bluetooth
+    build: markdown          # NOTE: large repo (~130 MB, capture data)
+  - name: internalblue
+    title: InternalBlue (Broadcom/Cypress firmware research)
+    repo: https://github.com/seemoo-lab/internalblue
+    category: bluetooth
+    build: markdown
+  - name: knob
+    title: KNOB attack (PoC)
+    repo: https://github.com/francozappa/knob
+    category: bluetooth
+    build: markdown
+  - name: mirage
+    title: Mirage (BLE/Zigbee/Mosart/ESB pentest framework, Cayre)
+    repo: https://github.com/RCayre/mirage
+    category: bluetooth
+    build: markdown
+    index_ext: [.rst]
+  - name: openhaystack
+    title: OpenHaystack (Apple Find My RE)
+    repo: https://github.com/seemoo-lab/openhaystack
+    category: bluetooth
+    build: markdown
+  - name: sniffle
+    title: Sniffle (BT5 LE sniffer, NCC Group)
+    repo: https://github.com/nccgroup/Sniffle
+    category: bluetooth
+    build: markdown
+  - name: sweyntooth
+    title: SweynTooth (BLE attack family PoCs)
+    repo: https://github.com/Matheus-Garbelini/sweyntooth_bluetooth_low_energy_attacks
+    category: bluetooth
+    build: markdown
+  - name: ubertooth
+    title: Ubertooth (BR/EDR + LE sniffer)
+    repo: https://github.com/greatscottgadgets/ubertooth
+    category: bluetooth
+    build: markdown
+    index_ext: [.rst]
+
+  # ---- WiFi security -----------------------------------------------
+  - name: aircrack-ng-docs
+    title: aircrack-ng (baseline suite)
+    repo: https://github.com/aircrack-ng/aircrack-ng
+    category: wifi
+    build: markdown
+  - name: airgeddon
+    title: airgeddon (WPA3/PMKID/Enterprise/evil-twin audit)
+    repo: https://github.com/v1s1t0r1sh3r3/airgeddon
+    category: wifi
+    build: markdown
+  - name: angryoxide
+    title: AngryOxide (modern Rust 802.11 attack tool)
+    repo: https://github.com/Ragnt/AngryOxide
+    category: wifi
+    build: markdown
+  - name: awesome-list-0xor0ne
+    title: 0xor0ne awesome-list (wireless + more)
+    repo: https://github.com/0xor0ne/awesome-list
+    category: wifi
+    build: markdown
+  - name: awesome-wifi-security
+    title: awesome-wifi-security (edelahozuah)
+    repo: https://github.com/edelahozuah/awesome-wifi-security
+    category: wifi
+    build: markdown
+  - name: dragondrain-and-time
+    title: Dragondrain/Dragontime (WPA3 DoS + timing, Vanhoef)
+    repo: https://github.com/vanhoefm/dragondrain-and-time
+    category: wifi
+    build: markdown
+  - name: dragonforce
+    title: Dragonforce (WPA3 timing/cache bruteforce, Vanhoef)
+    repo: https://github.com/vanhoefm/dragonforce
+    category: wifi
+    build: markdown
+  - name: dragonshift
+    title: DragonShift (WPA3 transition-mode downgrade)
+    repo: https://github.com/jabbaw0nky/DragonShift
+    category: wifi
+    build: markdown
+  - name: dragonslayer
+    title: Dragonslayer (EAP-pwd / SAE attacks, Vanhoef)
+    repo: https://github.com/vanhoefm/dragonslayer
+    category: wifi
+    build: markdown
+  - name: eaphammer
+    title: eaphammer (WPA2/3-Enterprise evil twin)
+    repo: https://github.com/s0lst1c3/eaphammer
+    category: wifi
+    build: markdown
+  - name: fragattacks
+    title: FragAttacks (fragmentation/aggregation, Vanhoef)
+    repo: https://github.com/vanhoefm/fragattacks
+    category: wifi
+    build: markdown
+  - name: hcxdumptool
+    title: hcxdumptool (PMKID/handshake capture)
+    repo: https://github.com/ZerBea/hcxdumptool
+    category: wifi
+    build: markdown
+  - name: hcxtools
+    title: hcxtools (capture -> hashcat 22000)
+    repo: https://github.com/ZerBea/hcxtools
+    category: wifi
+    build: markdown
+  - name: hostapd-mana
+    title: hostapd-mana (rogue AP / EAP credential capture)
+    repo: https://github.com/sensepost/hostapd-mana
+    category: wifi
+    build: markdown
+  - name: krackattacks
+    title: KRACK attacks (key reinstallation, Vanhoef)
+    repo: https://github.com/vanhoefm/krackattacks-scripts
+    category: wifi
+    build: markdown
+  - name: macstealer
+    title: MacStealer / Framing Frames (client-isolation bypass, Vanhoef)
+    repo: https://github.com/vanhoefm/macstealer
+    category: wifi
+    build: markdown
+  - name: wifichallengelab
+    title: WiFiChallengeLab (WPA3/Enterprise practice lab)
+    repo: https://github.com/r4ulcl/WiFiChallengeLab
+    category: wifi
+    build: markdown
+    # hostap / wpa_supplicant (git://w1.fi/hostap.git) is the SAE/OWE/SAE-PK/PMF
+    # reference implementation but it is C source (not indexed) with no canonical
+    # GitHub mirror -> read at w1.fi. IEEE 802.11 (GET IEEE 802 program) is the
+    # normative spec -> gated PDF, drop into ./custom/ if you have it.
+  - name: wifipumpkin3
+    title: wifipumpkin3 (rogue-AP framework)
+    repo: https://github.com/P0cL4bs/wifipumpkin3
+    category: wifi
+    build: markdown
+
+  # ---- SDR / RF DSP (textbooks + tool docs) ------------------------
+  - name: commpy
+    title: CommPy (digital comms in Python)
+    repo: https://github.com/veeresht/CommPy
+    category: sdr
+    build: markdown
+  - name: inspectrum-docs
+    title: inspectrum (signal analysis)
+    repo: https://github.com/miek/inspectrum
+    category: sdr
+    build: markdown
+  - name: learnsdr
+    title: learnSDR (curated tutorial path, gallicchio)
+    repo: https://github.com/gallicchio/learnSDR
+    category: sdr
+    build: markdown
+    # Web/PDF-only SDR/DSP references (not clean repos) -> drop PDFs into ./custom/:
+    #   GNU Radio wiki + SuggestedReading bibliography (wiki.gnuradio.org),
+    #   The Scientist & Engineer's Guide to DSP (dspguide.com),
+    #   Julius O. Smith's 4 books (ccrma.stanford.edu/~jos), Wireless Pi,
+    #   Software-Defined Radio for Engineers free PDF (Analog Devices),
+    #   Ossmann's HackRF SDR course (greatscottgadgets.com/sdr),
+    #   Signal Identification Guide (sigidwiki.com) - mirror entries you care about.
+  - name: liquid-dsp
+    title: "liquid-dsp (C DSP reference: modems/filters/sync)"
+    repo: https://github.com/jgaeddert/liquid-dsp
+    category: sdr
+    build: markdown
+    # whole repo: doc/*.rst caught globally; C sources are never indexed
+  - name: mhostetter-sdr
+    title: mhostetter/sdr (MATLAB comms/DSP toolbox replica, notebooks)
+    repo: https://github.com/mhostetter/sdr
+    category: sdr
+    build: markdown
+    index_ext: [.ipynb]
+  - name: pysdr
+    title: PySDR (RF DSP textbook; beamforming/DoA + cyclostationary)
+    repo: https://github.com/777arc/PySDR
+    category: sdr
+    build: markdown
+    index_ext: [.rst]
+  - name: scikit-dsp-comm
+    title: scikit-dsp-comm (notebooks)
+    repo: https://github.com/mwickert/scikit-dsp-comm
+    category: sdr
+    build: markdown
+    index_ext: [.ipynb]
+  - name: sdr4engineers-labs
+    title: SDR for Engineers - Lab Guides (Pluto SDR)
+    repo: https://github.com/sdrforengineers/LabGuides
+    category: sdr
+    build: markdown
+  - name: sdr4engineers-lectures
+    title: SDR for Engineers - Lecture Materials (Pluto SDR)
+    repo: https://github.com/sdrforengineers/LectureMaterials
+    category: sdr
+    build: markdown
+  - name: sdrangel-docs
+    title: SDRangel (docs)
+    repo: https://github.com/f4exb/sdrangel
+    category: sdr
+    build: markdown
+  - name: sdrpp-docs
+    title: SDR++ (docs)
+    repo: https://github.com/AlexandreRouma/SDRPlusPlus
+    category: sdr
+    build: markdown
+  - name: soapysdr
+    title: SoapySDR (hardware abstraction layer)
+    repo: https://github.com/pothosware/SoapySDR
+    category: sdr
+    build: markdown
+  - name: thinkdsp
+    title: ThinkDSP (hands-on spectral analysis)
+    repo: https://github.com/AllenDowney/ThinkDSP
+    category: sdr
+    build: markdown
+    index_ext: [.ipynb]
+  - name: urh-docs
+    title: Universal Radio Hacker (docs; upstream of URH-NG)
+    repo: https://github.com/jopohl/urh
+    category: sdr
+    build: markdown
+  # Web/PDF-only SDR/DSP references (not clean repos) -> drop PDFs into ./custom/:
+  #   GNU Radio wiki + SuggestedReading bibliography (wiki.gnuradio.org),
+  #   The Scientist & Engineer's Guide to DSP (dspguide.com),
+  #   Julius O. Smith's 4 books (ccrma.stanford.edu/~jos), Wireless Pi,
+  #   Software-Defined Radio for Engineers free PDF (Analog Devices),
+  #   Ossmann's HackRF SDR course (greatscottgadgets.com/sdr),
+  #   Signal Identification Guide (sigidwiki.com).
+
+  # ---- Compliance / GRC (governance, frameworks, crosswalks) -------
+  - name: awesome-compliance
+    title: awesome-compliance (GRC bibliography - ISO 27001/SOC 2/SOX/ESG)
+    repo: https://github.com/theopenlane/awesome-compliance
+    category: compliance
+    build: markdown
+  - name: nist-oscal
+    title: NIST OSCAL (machine-readable control catalogs + docs; CSF/800-53/800-171)
+    repo: https://github.com/usnistgov/OSCAL
+    category: compliance
+    build: markdown
+  - name: owasp-samm
+    title: OWASP SAMM (Software Assurance Maturity Model - tie findings to a program)
+    repo: https://github.com/OWASP/samm
+    category: compliance
+    build: markdown
+  # CISO Assistant (intuitem/ciso-assistant-community) is an open GRC PLATFORM;
+  # its framework libraries are machine-readable control data (urn refs), not
+  # readable docs - run the tool rather than index it.
+  # Free-but-gated / official artifacts -> drop into ./custom/ or type:local:
+  #   NIST CSF 2.0, SP 800-53 Rev5, SP 800-171 (free PDFs, csrc.nist.gov),
+  #   usnistgov/oscal-content for the raw catalogs (large JSON/XML),
+  #   CIS Controls v8.1 + Benchmarks (free w/ registration, cisecurity.org),
+  #   Secure Controls Framework (SCF) crosswalk spreadsheet (securecontrolsframework.com),
+  #   CSA Cloud Controls Matrix CCM (cloudsecurityalliance.org),
+  #   SANS security policy templates (sans.org/information-security-policy),
+  #   ANSSI EBIOS Risk Manager + guides + PASSI referentiel (cyber.gouv.fr),
+  #   NIS2 / DORA / CRA consolidated text (EUR-Lex) + ENISA guidance,
+  #   GDPR official text + CNIL guidance (cnil.fr).

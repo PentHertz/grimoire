@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grimoire-docs"
+version = "1.0.0"
+description = "Offline pentest documentation aggregator + unified search, with an MCP server to attach an AI model."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Sebastien Dudek (Penthertz)" }]
+keywords = ["pentest", "documentation", "search", "mcp", "rf-swift", "offline"]
+dependencies = [
+    "PyYAML>=5.1",
+]
+
+[project.optional-dependencies]
+# Nicer rendering of markdown docs in the viewer (degrades to escaped text if absent).
+render = ["markdown>=3.0"]
+
+[project.urls]
+Homepage = "https://penthertz.com"
+Repository = "https://github.com/PentHertz/grimoire"
+"RF-Swift" = "https://github.com/PentHertz/RF-Swift"
+
+# `grimoire` on the PATH after `pipx install grimoire-docs` (or `pip install .`).
+[project.scripts]
+grimoire = "grimoire_app.controller:main"
+
+[tool.setuptools]
+packages = ["grimoire_app"]
+
+[tool.setuptools.package-data]
+# ship the web UI and the default manifest inside the wheel
+grimoire_app = ["web/*", "sources.default.yaml"]
