@@ -1,3 +1,4 @@
+<img width="2967" height="1484" alt="glitch" src="https://github.com/user-attachments/assets/dc46df80-fd42-45f3-b7e7-079136c0e713" />
 # Grimoire
 
 **Offensive knowledge, offline. One search box for every playbook.**
@@ -26,6 +27,9 @@ embedded in RF-Swift.
   GRIMOIRE   offensive knowledge, offline
   > ssrf_   ->  HackTricks . PayloadsAllTheThings . WSTG . API Top 10 ...
 ```
+
+<img width="2967" height="1484" alt="glitch" src="https://github.com/user-attachments/assets/a30c31bf-3a22-4e5d-9718-e062f2d563a4" />
+
 
 ## Features
 
