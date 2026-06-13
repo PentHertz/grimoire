@@ -63,6 +63,7 @@ Curated in [`sources.yaml`](sources.yaml), grouped by category:
 |---|---|
 | `wikis` | HackTricks, HackTricks Cloud, PayloadsAllTheThings, The Hacker Recipes, six2dez Pentest Book |
 | `ad-internal` | InternalAllTheThings, ired.team, OCD mindmaps |
+| `c2` | Sliver |
 | `hardware-iot` | HardwareAllTheThings |
 | `mobile` | OWASP MASTG, OWASP MASVS |
 | `web-api` | OWASP WSTG, Cheat Sheet Series, ASVS, API Security Top 10 |

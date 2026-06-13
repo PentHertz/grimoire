@@ -66,6 +66,15 @@ sources:
     category: ad-internal
     build: markdown   # mostly visual mindmaps (svg/drawio); only md/README is indexed
 
+  # ---- Command & Control -------------------------------------------
+  - name: sliver
+    title: Sliver C2
+    repo: https://github.com/BishopFox/sliver
+    category: c2
+    build: markdown
+    docs_dir: docs/sliver-docs/pages
+    sparse: [docs/sliver-docs/pages]   # 200MB+ Go repo; sparse-checkout only the docs-site markdown (pages/docs/md + pages/tutorials/md)
+
   # ---- Hardware / IoT ----------------------------------------------
   - name: hardwareallthethings
     title: HardwareAllTheThings
