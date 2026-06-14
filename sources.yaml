@@ -48,6 +48,10 @@ sources:
     repo: https://github.com/ShutdownRepo/the-hacker-recipes
     category: wikis
     build: mdbook
+  - name: hacknetics
+    title: Hacknetics
+    repo: https://github.com/ice-wzl/Hacknetics
+    category: wikis
 
   # ---- Active Directory / internal ---------------------------------
   - name: internalallthethings
