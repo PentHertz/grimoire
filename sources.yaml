@@ -662,19 +662,9 @@ sources:
     repo: https://github.com/sdrforengineers/LectureMaterials
     category: sdr
     build: markdown
-  - name: sdrangel-docs
-    title: SDRangel (docs)
-    repo: https://github.com/f4exb/sdrangel
-    category: sdr
-    build: markdown
   - name: sdrpp-docs
     title: SDR++ (docs)
     repo: https://github.com/AlexandreRouma/SDRPlusPlus
-    category: sdr
-    build: markdown
-  - name: soapysdr
-    title: SoapySDR (hardware abstraction layer)
-    repo: https://github.com/pothosware/SoapySDR
     category: sdr
     build: markdown
   - name: thinkdsp
@@ -683,11 +673,6 @@ sources:
     category: sdr
     build: markdown
     index_ext: [.ipynb]
-  - name: urh-docs
-    title: Universal Radio Hacker (docs; upstream of URH-NG)
-    repo: https://github.com/jopohl/urh
-    category: sdr
-    build: markdown
   # Web/PDF-only SDR/DSP references (not clean repos) -> drop PDFs into ./custom/:
   #   GNU Radio wiki + SuggestedReading bibliography (wiki.gnuradio.org),
   #   The Scientist & Engineer's Guide to DSP (dspguide.com),
