@@ -204,8 +204,6 @@ def _walk_text_files(base: Path, docs_dir=None, exts=None):
 def _read_doc_text(f: Path) -> str:
     """Read a doc file as text, using registered converters for custom formats.
     Falls back to raw text if no converter is registered."""
-    from . import converters
-    
     converted = converters.convert(f)
     if converted is not None:
         return converted

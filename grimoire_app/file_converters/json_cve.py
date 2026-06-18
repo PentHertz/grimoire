@@ -32,7 +32,7 @@ def cve_json_to_markdown(json_path: str) -> str:
             if versions:
                 for v in versions:
                     version_str = v.get('version', 'Unknown')
-                    if v.has('lessThanOrEqual'):
+                    if v.get('lessThanOrEqual', {}):
                         version_str += f" (<= {v.get('lessThanOrEqual')})"
                     status = v.get('status', '')
                     md += f"  - `{version_str}` ({status})\n"

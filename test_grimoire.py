@@ -17,7 +17,7 @@ import urllib.error
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from grimoire_app import config, model, view, controller, mcp, runner
+from grimoire_app import config, model, view, controller, mcp, runner, converters
 
 PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00"
@@ -54,6 +54,7 @@ class TestPure(unittest.TestCase):
         self.assertIn('class="tag"', out)                 # #tag styled
 
     def test_notebook_to_markdown(self):
+        import grimoire_app.file_converters.ipynb as model
         nb = json.dumps({
             "metadata": {"kernelspec": {"language": "python"}},
             "cells": [
@@ -73,6 +74,7 @@ class TestPure(unittest.TestCase):
         self.assertEqual(model._notebook_to_markdown("not json {"), "not json {")
 
     def test_pdf_to_html_pages_and_escapes(self):
+        import grimoire_app.file_converters.pdf as view
         out = view._pdf_to_html("Intro <b>x</b>\ntext\fpage two body")
         self.assertEqual(out.count("pdfpage"), 2)            # split on form-feed
         self.assertIn("page 1", out)
@@ -82,6 +84,7 @@ class TestPure(unittest.TestCase):
         self.assertIn("(no extractable text", view._pdf_to_html("\f  \f"))  # empty -> note
 
     def test_yaml_humanize_decodes_escaped_unicode(self):
+        import grimoire_app.file_converters.yaml as model
         # framework YAMLs store non-ASCII as \xE9 / \xA9 escapes -> decode them
         raw = 'name: "S\\xE9curit\\xE9"\ncopyright: "\\xA9 2026"\n'
         out = model._yaml_humanize(raw)
@@ -203,6 +206,7 @@ class TestServer(unittest.TestCase):
             "sources:\n"
             f"  - {{name: loc, title: Loc, type: local, path: {src}, "
             "category: web-api, index_ext: [.ipynb]}\n")
+        converters.load_converters()
         model.cmd_index(types.SimpleNamespace(force=True))
 
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), controller.make_handler())

@@ -47,7 +47,7 @@ def load_converters():
     import importlib.util
     from pathlib import Path as P
     
-    conv_dir = P(__file__).parent / "converters"
+    conv_dir = P(__file__).parent / "file_converters"
     if not conv_dir.exists():
         return
     
