@@ -14,10 +14,9 @@ import re
 import sqlite3
 import subprocess
 import sys
-import urllib.parse
 from pathlib import Path
 
-from . import config
+from . import config, converters
 
 # Accept only ordinary remote git URL schemes. This blocks git's local/transport
 # helpers that can execute commands at clone time - notably `ext::sh -c ...` and
@@ -202,96 +201,16 @@ def _walk_text_files(base: Path, docs_dir=None, exts=None):
             if Path(fn).suffix.lower() in exts:
                 yield Path(dirpath) / fn
 
-def _pdf_text(path: Path) -> str:
-    """Extract text from a PDF (books like RE-for-Beginners) via poppler's
-    pdftotext, if installed. Returns '' otherwise (PDF kept but not indexed)."""
-    import shutil
-    if not shutil.which("pdftotext"):
-        return ""
-    r = subprocess.run(["pdftotext", "-q", str(path), "-"], capture_output=True, text=True)
-    return r.stdout if r.returncode == 0 else ""
-
-def _notebook_to_markdown(text: str) -> str:
-    """Convert a Jupyter .ipynb (JSON) into readable markdown: markdown cells
-    verbatim, code cells as fenced blocks, text outputs as plain output blocks.
-    Falls back to the raw text if it is not valid notebook JSON."""
-    try:
-        nb = json.loads(text)
-        cells = nb["cells"]
-    except Exception:
-        return text
-    lang = "python"
-    try:
-        meta = nb.get("metadata", {})
-        lang = (meta.get("kernelspec", {}).get("language")
-                or meta.get("language_info", {}).get("name") or "python")
-    except Exception:
-        pass
-
-    def _src(cell):
-        s = cell.get("source", "")
-        return "".join(s) if isinstance(s, list) else (s or "")
-
-    out = []
-    for cell in cells:
-        ct = cell.get("cell_type")
-        if ct in ("markdown", "raw"):
-            chunk = _src(cell).strip()
-            if chunk:
-                out.append(chunk)
-        elif ct == "code":
-            code = _src(cell).rstrip()
-            if code:
-                out.append(f"```{lang}\n{code}\n```")
-            for o in cell.get("outputs", []):
-                txt = ""
-                if o.get("output_type") == "stream":
-                    t = o.get("text", "")
-                    txt = "".join(t) if isinstance(t, list) else t
-                elif o.get("output_type") in ("execute_result", "display_data"):
-                    d = (o.get("data") or {}).get("text/plain", "")
-                    txt = "".join(d) if isinstance(d, list) else d
-                txt = (txt or "").rstrip()
-                if txt:
-                    out.append("```\n" + txt[:2000] + "\n```")
-    return "\n\n".join(out)
-
-def _yaml_humanize(text: str) -> str:
-    """Re-render YAML so escaped-unicode scalars (e.g. "S\\xE9curit\\xE9",
-    "\\u2014") show as real characters. Many machine-generated framework files
-    (CISO Assistant, etc.) store non-ASCII this way, which is unreadable in the
-    viewer and unsearchable. Falls back to the raw text if it does not parse
-    cleanly or PyYAML is unavailable.
-
-    Only files that actually contain escaped-unicode sequences are re-emitted;
-    clean YAML is returned verbatim so its comments and formatting are kept (a
-    re-dump would drop comments)."""
-    import re as _re
-    if not _re.search(r"\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}", text):
-        return text
-    try:
-        import yaml
-        docs = list(yaml.safe_load_all(text))   # handle multi-document files too
-    except Exception:
-        return text
-    docs = [d for d in docs if d is not None]
-    if not docs:
-        return text
-    try:
-        return yaml.safe_dump_all(docs, allow_unicode=True, sort_keys=False,
-                                  default_flow_style=False, width=100)
-    except Exception:
-        return text
-
 def _read_doc_text(f: Path) -> str:
-    """Read a doc file as text, normalizing on the way: notebooks -> markdown,
-    YAML -> unicode-decoded YAML (so escaped accents/dashes are readable)."""
+    """Read a doc file as text, using registered converters for custom formats.
+    Falls back to raw text if no converter is registered."""
+    from . import converters
+    
+    converted = converters.convert(f)
+    if converted is not None:
+        return converted
+    
     text = f.read_text(encoding="utf-8", errors="ignore")
-    suf = f.suffix.lower()
-    if suf == ".ipynb":
-        return _notebook_to_markdown(text)
-    if suf in (".yml", ".yaml"):
-        return _yaml_humanize(text)
     return text
 
 
@@ -415,7 +334,7 @@ def _index_source(idx: Index, name, cat, base, docs_dir=None, exts=None) -> int:
         cnt += 1
     # PDFs (books) - extracted to text when pdftotext is available
     for f in _walk_text_files(base, docs_dir, {".pdf"}):
-        text = _pdf_text(f)
+        text = _read_doc_text(f)
         if text.strip():
             idx.insert(name, f.stem.replace("-", " "), cat,
                        f.relative_to(base).as_posix(), text)
@@ -436,6 +355,10 @@ def cmd_index(args):
 
     idx = Index()
     idx.create()
+
+    # Load all converters (built-in + custom)
+    converters.load_converters()
+
     try:
         new_state, reindexed, skipped = {}, 0, 0
         units = [(s["name"],
@@ -578,8 +501,6 @@ def doc_text(source: str, relpath: str):
     f = _resolve_doc(source, relpath)
     if not f or f.suffix.lower() not in config.DOC_EXT:
         return None
-    if f.suffix.lower() == ".pdf":
-        return _pdf_text(f)
     try:
         return _read_doc_text(f)
     except OSError:
