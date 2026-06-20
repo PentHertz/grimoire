@@ -244,6 +244,50 @@ sources:
     category: re-indexes
     build: markdown
 
+  # ---- Automotive / vehicle security ------------------------------
+  - name: awesome-vehicle-security
+    title: Awesome Vehicle Security (jaredthecoder)
+    repo: https://github.com/jaredthecoder/awesome-vehicle-security
+    category: automotive
+    build: markdown
+  - name: opendbc
+    title: opendbc (CAN database, comma.ai)
+    repo: https://github.com/commaai/opendbc
+    category: automotive
+    build: markdown
+    index_ext: [.dbc]
+  - name: can-utils
+    title: can-utils (SocketCAN CLI tools)
+    repo: https://github.com/linux-can/can-utils
+    category: automotive
+    build: markdown
+  - name: caringcaribou
+    title: Caring Caribou (CAN security testing)
+    repo: https://github.com/CaringCaribou/caringcaribou
+    category: automotive
+    build: markdown
+    docs_dir: documentation
+  - name: gallia
+    title: Gallia (automotive UDS/DoIP pentesting framework)
+    repo: https://github.com/Fraunhofer-AISEC/gallia
+    category: automotive
+    build: markdown
+    docs_dir: docs
+    sparse: [docs]
+  - name: cantools
+    title: cantools (CAN/DBC/ARXML parser + decoder)
+    repo: https://github.com/cantools/cantools
+    category: automotive
+    build: markdown
+    docs_dir: docs
+    sparse: [docs]
+    index_ext: [.rst]
+  - name: v2ginjector
+    title: V2GInjector (V2G/EV charging protocol injection)
+    repo: https://github.com/FlUxIuS/V2GInjector
+    category: automotive
+    build: markdown
+
   # ---- Firmware ----------------------------------------------------
   - name: awesome-firmware-security
     title: Awesome Firmware Security
