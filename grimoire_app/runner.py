@@ -92,8 +92,12 @@ def rfswift_scripts_dir():
     if cand.is_dir() and any(cand.glob("*.sh")):
         return cand
     for p in ("/root/scripts", "/scripts", "/opt/rfswift/scripts"):
-        if Path(p).is_dir() and any(Path(p).glob("*.sh")):
-            return Path(p)
+        try:
+            cand = Path(p)
+            if cand.is_dir() and any(cand.glob("*.sh")):
+                return cand
+        except OSError:
+            pass
     return None
 
 def _entrypoint():

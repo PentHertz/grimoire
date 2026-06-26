@@ -27,7 +27,9 @@ embedded in RF-Swift.
 - **Unified search** over 20+ sources via SQLite **FTS5** with BM25 ranking -
   one query language regardless of how each repo is authored (mdBook, mkdocs,
   Jekyll, Hugo, plain markdown, YAML).
-- **Fully offline** once fetched. No telemetry, no external calls at runtime.
+- **Fully offline** once fetched and indexed. No telemetry, no external calls at
+  runtime; see [docs/OFFLINE_BUNDLE.md](docs/OFFLINE_BUNDLE.md) for baking the
+  fetched docs and FTS index into a VM/container image.
 - **Spawnable web service** - `grimoire.py serve` (bind host/port; run it in the
   background or as a container service).
 - **Provenance** - every doc shows its source and a link to the **original file
@@ -69,6 +71,11 @@ Curated in [`sources.yaml`](sources.yaml), grouped by category:
 | `web-api` | OWASP WSTG, Cheat Sheet Series, ASVS, API Security Top 10 |
 | `lotl` | GTFOBins, LOLBAS, GTFOArgs, LOLDrivers, LOOBins, WADComs |
 | `re-books` | mytechnotalent/Reverse-Engineering, Nightmare, how2heap (drop a PDF book in `custom/` to add one) |
+| `exploit-dev` | pwn-notes, Heap Exploitation, RPISEC MBE, Trail of Bits CTF Field Guide, pwntools tutorial |
+| `exploit-tools` | pwndbg docs, GEF docs |
+| `kernel-exploitation` | xairy Linux kernel exploitation, Windows kernel resources |
+| `vuln-research` | Project Zero 0days in the Wild, Project Zero p0tools, Awesome Vulnerability Research |
+| `fuzzing` | Google fuzzing docs, AFL++ docs, syzkaller docs |
 | `re-tools` | radare2book, rizin book, angr docs, Ghidra (in-tree docs) |
 | `re-indexes` | Awesome-Reversing (ReversingID + tylerha97), reverse-engineering (wtsxDev), Awesome Malware Analysis, Awesome Android RE |
 | `firmware` | Awesome Firmware Security |
@@ -191,7 +198,8 @@ Grimoire is the `grimoire.py` launcher + the `grimoire_app/` package + manifest
 just `PyYAML` + `markdown`). To bake an
 offline knowledge base into an image: run `fetch` + `index` at build time, ship
 `data/index.db` (and `data/sources/` for the doc viewer), then `grimoire.py
-serve` as a runtime command.
+serve` as a runtime command. See [docs/OFFLINE_BUNDLE.md](docs/OFFLINE_BUNDLE.md)
+for the exact artifact list and refresh flow.
 
 ## Security
 

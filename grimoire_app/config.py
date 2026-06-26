@@ -56,7 +56,7 @@ TEXT_EXT = {".md", ".markdown", ".mdx", ".rst", ".yml", ".yaml"}  # .rst = Sphin
 ASSET_EXT = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp", ".ico", ".pdf"}
 # Files the /doc viewer and grimoire_fetch_doc may return - document types only,
 # so an exposed server cannot be used to read .git/config, .env, keys, source, etc.
-DOC_EXT = (TEXT_EXT | {".ipynb", ".pdf", ".json", ".txt", ".csv", ".adoc",
+DOC_EXT = (TEXT_EXT | {".ipynb", ".pdf", ".json", ".txt", ".csv", ".adoc", ".readme",
                        ".tkape", ".mkape"})
 IGNORE_DIRS = {".git", "node_modules", "theme", "themes", ".github", "assets",
                "images", "img", "static", "site", "book"}
