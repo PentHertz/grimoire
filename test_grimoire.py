@@ -192,6 +192,8 @@ class TestServer(unittest.TestCase):
                 {"cell_type": "markdown", "source": ["# Glitch NB\n", "nbmagicword\n"]},
                 {"cell_type": "code", "source": ["fault_inject()\n"], "outputs": []},
             ]}))
+        # RPISEC MBE-style lab notes use a .readme suffix, not .md.
+        (src / "lab6B.readme").write_text("# MBE lab\nret2libc readmetoken")
         (src / "pics" / "a.png").write_bytes(PNG)
         (src / "secret.env").write_text("API_KEY=supersecret")     # must NOT be servable
         try:
@@ -202,7 +204,7 @@ class TestServer(unittest.TestCase):
         config.SOURCES_FILE.write_text(
             "sources:\n"
             f"  - {{name: loc, title: Loc, type: local, path: {src}, "
-            "category: web-api, index_ext: [.ipynb]}\n")
+            "category: web-api, index_ext: [.ipynb, .readme]}\n")
         model.cmd_index(types.SimpleNamespace(force=True))
 
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), controller.make_handler())
@@ -266,6 +268,15 @@ class TestServer(unittest.TestCase):
         # the doc viewer renders it as HTML (fenced code -> <pre>/<code>), not JSON
         _, doc, _ = self._get("/doc?src=loc&path=nb.ipynb")
         self.assertNotIn("&quot;cell_type&quot;", doc.decode())
+
+    def test_readme_extension_indexed_and_fetchable(self):
+        # Extra index extensions must also be safe to retrieve through /doc/MCP.
+        _, body, _ = self._get("/api/search?q=readmetoken")
+        hits = json.loads(body.decode())
+        self.assertTrue(any(h["path"] == "lab6B.readme" for h in hits))
+        self.assertIn("ret2libc readmetoken", model.doc_text("loc", "lab6B.readme"))
+        _, doc, _ = self._get("/doc?src=loc&path=lab6B.readme")
+        self.assertIn("ret2libc readmetoken", doc.decode())
 
     def test_yaml_doc_renders_decoded_unicode(self):
         # a framework-style YAML with escaped unicode must display as real chars

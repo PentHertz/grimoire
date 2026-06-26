@@ -202,6 +202,100 @@ sources:
   # OpenSecurityTraining2 (ost2.fyi): classes are per-repo and not enumerable
   # under one public GitHub account; add individual class repos or set `org:`.
 
+  # ---- Low-level bugs / exploit development ------------------------
+  - name: pwn-notes
+    title: pwn-notes (binary, heap, browser, kernel exploitation)
+    repo: https://github.com/ir0nstone/pwn-notes
+    category: exploit-dev
+    build: mdbook
+  - name: heap-exploitation
+    title: Heap Exploitation (dhavalkapil)
+    repo: https://github.com/dhavalkapil/heap-exploitation
+    category: exploit-dev
+    build: mdbook
+  - name: rpisec-mbe
+    title: RPISEC MBE (Modern Binary Exploitation)
+    repo: https://github.com/RPISEC/MBE
+    category: exploit-dev
+    build: markdown
+    index_ext: [.readme]
+  - name: trailofbits-ctf
+    title: Trail of Bits CTF Field Guide
+    repo: https://github.com/trailofbits/ctf
+    category: exploit-dev
+    build: mdbook
+  - name: pwntools-tutorial
+    title: pwntools tutorial
+    repo: https://github.com/Gallopsled/pwntools-tutorial
+    category: exploit-dev
+    build: markdown
+
+  # ---- Exploitation tool docs --------------------------------------
+  - name: pwndbg-docs
+    title: pwndbg docs
+    repo: https://github.com/pwndbg/pwndbg
+    category: exploit-tools
+    build: mkdocs
+    docs_dir: docs
+    sparse: [docs]
+  - name: gef-docs
+    title: GEF docs
+    repo: https://github.com/hugsy/gef
+    category: exploit-tools
+    build: mkdocs
+    docs_dir: docs
+    sparse: [docs]
+
+  # ---- Kernel exploitation -----------------------------------------
+  - name: linux-kernel-exploitation
+    title: Linux kernel exploitation (xairy)
+    repo: https://github.com/xairy/linux-kernel-exploitation
+    category: kernel-exploitation
+    build: markdown
+  - name: windows-kernel-resources
+    title: Windows kernel resources (sam-b)
+    repo: https://github.com/sam-b/windows_kernel_resources
+    category: kernel-exploitation
+    build: markdown
+
+  # ---- Vulnerability research / root-cause writeups ----------------
+  - name: p0-0days-in-the-wild
+    title: Project Zero 0days in the Wild
+    repo: https://github.com/googleprojectzero/0days-in-the-wild
+    category: vuln-research
+    build: markdown
+  - name: p0tools
+    title: Project Zero p0tools
+    repo: https://github.com/googleprojectzero/p0tools
+    category: vuln-research
+    build: markdown
+  - name: awesome-vulnerability-research
+    title: Awesome Vulnerability Research
+    repo: https://github.com/sergey-pronin/Awesome-Vulnerability-Research
+    category: vuln-research
+    build: markdown
+
+  # ---- Fuzzing ------------------------------------------------------
+  - name: google-fuzzing
+    title: Google fuzzing docs
+    repo: https://github.com/google/fuzzing
+    category: fuzzing
+    build: markdown
+  - name: aflplusplus-docs
+    title: AFL++ docs
+    repo: https://github.com/AFLplusplus/AFLplusplus
+    category: fuzzing
+    build: markdown
+    docs_dir: docs
+    sparse: [docs]
+  - name: syzkaller-docs
+    title: syzkaller docs
+    repo: https://github.com/google/syzkaller
+    category: fuzzing
+    build: markdown
+    docs_dir: docs
+    sparse: [docs]
+
   # ---- Reverse engineering: tool docs that double as references ----
   - name: angr-doc
     title: angr docs (symbolic execution)

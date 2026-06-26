@@ -30,6 +30,10 @@ See [MCP_TUTORIAL.md](MCP_TUTORIAL.md) for attaching Claude / Codex / Gemini and
 ./grimoire.py build                      # OPTIONAL native mdbook/mkdocs render
 ```
 
+For an image or air-gapped runtime, build the corpus once with network access,
+then ship the fetched source trees plus the SQLite FTS index. See
+[OFFLINE_BUNDLE.md](OFFLINE_BUNDLE.md).
+
 You can also refresh from the web UI: click **Update docs** (top-right) - it
 git-pulls every source and rebuilds the index in the background, showing live
 progress, then refreshes the results in place.
