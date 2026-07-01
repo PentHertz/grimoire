@@ -1,0 +1,64 @@
+name: CI
+
+# Test + package checks on every push and PR. The unit suite is fully offline
+# (no network clones, stdlib http.server bound to 127.0.0.1) and includes the
+# SQLi / XSS / SSTI / CSRF / path-traversal / scope-bypass security regressions,
+# so a red build means a real regression.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Match requires-python (>=3.9) through the current stable line.
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install runtime deps
+        run: python -m pip install --upgrade pip -r requirements.txt
+
+      - name: Byte-compile (syntax check every module)
+        run: python -m compileall -q grimoire_app test_grimoire.py
+
+      - name: Run unit + security tests
+        run: python -m unittest -v
+
+  package:
+    name: package + CLI smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the package (validates pyproject + entry point)
+        run: python -m pip install --upgrade pip .
+
+      - name: CLI smoke test
+        run: |
+          grimoire --help
+          grimoire sources   # loads/validates the packaged default manifest
