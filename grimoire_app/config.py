@@ -38,6 +38,20 @@ INDEX_DB = DATA / "index.db"
 INDEX_STATE = DATA / "index_state.json"   # per-source revision -> incremental reindex
 CUSTOM_DIR = HOME / "custom"
 
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+# Keep each source's .git by default so `update` can `git pull` incrementally
+# (and skip reindexing unchanged commits). Opt in to deleting it after fetch with
+# `fetch --prune-git` or GRIMOIRE_PRUNE_GIT=1 to reclaim ~40% of a shallow
+# checkout - the doc viewer serves the working tree and the "view original on
+# GitHub" link is built from the manifest repo URL, so neither needs .git; the
+# cost is that a later fetch re-clones instead of pulling. Ideal when baking an
+# offline/RF-Swift image that is never updated in place.
+PRUNE_GIT = _env_flag("GRIMOIRE_PRUNE_GIT")
+
 # Shipped (read-only) resources: web UI + the default manifest seed.
 WEB_DIR = PKG_DIR / "web"
 DEFAULT_SOURCES = PKG_DIR / "sources.default.yaml"

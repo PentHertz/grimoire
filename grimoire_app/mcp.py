@@ -19,7 +19,7 @@ import sys
 from . import context, model, runner
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "grimoire", "version": "1.0.0"}
+SERVER_INFO = {"name": "grimoire", "version": "1.1.0"}
 
 # Path to the operator's engagement context YAML (set by cmd_mcp at launch).
 CONTEXT_PATH = None
@@ -364,9 +364,16 @@ def _call_tool(name, args):
 def handle(req):
     """Handle one JSON-RPC request dict. Returns a response dict, or None for
     notifications (no id) which must not be answered."""
+    # A JSON-RPC message must be an object, and `params` (when present) a
+    # structured value; anything else is a malformed request, not a crash.
+    if not isinstance(req, dict):
+        return {"jsonrpc": "2.0", "id": None,
+                "error": {"code": -32600, "message": "invalid request"}}
     rid = req.get("id")
     method = req.get("method")
-    params = req.get("params") or {}
+    params = req.get("params")
+    if not isinstance(params, dict):
+        params = {}
 
     def ok(result):
         return {"jsonrpc": "2.0", "id": rid, "result": result}
@@ -433,7 +440,12 @@ def serve(stdin=None, stdout=None):
             stdout.write(json.dumps(resp) + "\n")
             stdout.flush()
             continue
-        resp = handle(req)
+        try:
+            resp = handle(req)
+        except Exception as e:                 # one bad message must not kill the loop
+            rid = req.get("id") if isinstance(req, dict) else None
+            resp = {"jsonrpc": "2.0", "id": rid,
+                    "error": {"code": -32603, "message": f"internal error: {e}"}}
         if resp is not None:
             stdout.write(json.dumps(resp) + "\n")
             stdout.flush()

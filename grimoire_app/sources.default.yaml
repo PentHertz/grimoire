@@ -10,7 +10,9 @@
 #   repo      : git URL (omit for type: local)
 #   category  : grouping shown/filtered in the UI
 #   build     : native build system (mdbook|mkdocs|jekyll|hugo|markdown)
-#   docs_dir  : (optional) subdir to index/build; default = whole repo
+#   docs_dir  : (optional) subdir to index/build; default = whole repo. For
+#               markdown sources it also scopes the git checkout (sparse) so only
+#               that subtree is downloaded - set `sparse:` to override.
 #   sparse    : (optional) list of paths to sparse-checkout for huge repos
 #   org       : (optional) GitHub org/user - clones every public repo
 #   pdf_url   : (optional) direct PDF URL to download and index (needs pdftotext)
@@ -57,6 +59,11 @@ sources:
     repo: https://github.com/A-poc/RedTeam-Tools
     category: wikis
     build: markdown
+  - name: awesome-cybersecurity-handbooks
+    title: Awesome Cybersecurity Handbooks (0xsyr0)
+    repo: https://github.com/0xsyr0/Awesome-Cybersecurity-Handbooks
+    category: wikis
+    build: markdown   # broad multi-domain markdown handbooks (handbooks/); no site generator
 
   # ---- Active Directory / internal ---------------------------------
   - name: internalallthethings

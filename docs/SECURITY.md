@@ -20,19 +20,31 @@ understand before relying on it - especially the execution modes.
 - **No SQL injection.** All queries are parameterized via `model.Index`; free
   text is reduced to alphanumeric prefix tokens by `_fts_query` before reaching
   an FTS5 MATCH. (`test_sqli_*`, `test_search_*`.)
-- **No stored XSS.** Rendered docs and search snippets are HTML-escaped; pages
-  ship a strict per-load CSP nonce (`script-src 'nonce-...'`, no
-  `unsafe-inline`), so injected `<script>`/`on*`/`javascript:` cannot run.
-  (`test_*_csp`, `test_search_snippet_is_escaped`.)
+- **No stored XSS (two independent layers).** Search snippets and PDF/YAML text
+  are HTML-escaped; rendered markdown is additionally sanitized with `nh3`
+  (`<script>`/`on*`/`javascript:`/`<style>`/`<meta>` stripped) **and** served
+  under a strict per-load CSP nonce (`script-src 'nonce-...'`, no
+  `unsafe-inline`) - so a poisoned doc stays inert even if either layer is
+  weakened. Pages also send `X-Frame-Options: SAMEORIGIN` and `frame-ancestors`
+  so the update UI cannot be clickjacked. (`test_*_csp`,
+  `test_markdown_html_sanitized`, `test_clickjacking_protection`,
+  `test_search_snippet_is_escaped`.)
 - **No template injection.** HTML is built with f-strings/escaping, never a
   template engine on user data. (`test_no_template_injection`.)
 - **Path traversal blocked.** `_resolve_doc` resolves and confines paths to the
   source dir (symlink escapes and NUL bytes handled). `/asset` is limited to
   image/PDF extensions; `/doc` and `grimoire_fetch_doc` to document extensions
   (`config.DOC_EXT`) - so the server cannot be used to read `.git/config`,
-  `.env`, keys, or source. (`test_path_traversal_blocked`,
-  `test_asset_extension_allowlist`, `test_doc_blocks_non_document_extensions`.)
-- **CSRF guard** on the state-changing `/api/update` (custom header, no CORS).
+  `.env`, keys, or source. Source **names** are also validated as slugs, so a
+  crafted/imported manifest `name` (`../x`, `/abs`) cannot make fetch, index, or
+  the `.git` prune escape the sources dir. (`test_path_traversal_blocked`,
+  `test_asset_extension_allowlist`, `test_doc_blocks_non_document_extensions`,
+  `test_unsafe_source_name_is_rejected`.)
+- **CSRF guard** on the state-changing `/api/update` (custom header, no CORS),
+  backed by anti-clickjacking framing headers (see XSS above).
+- **MCP server is crash-resistant.** A malformed JSON-RPC message (non-object,
+  or non-dict `params`) returns a JSON-RPC error instead of killing the stdio
+  loop - no remote one-line DoS. (`test_mcp_malformed_request_does_not_crash`.)
 - **No command injection via tool names.** Install tool names are validated
   against `^[A-Za-z0-9][A-Za-z0-9._+-]*$`; metacharacters are refused before any
   shell command is built. (`test_runner_rejects_tool_name_injection`,
@@ -51,11 +63,15 @@ understand before relying on it - especially the execution modes.
   trivially bypassable (`$(...)`, variable expansion, odd spacing). It stops
   accidents, not a determined adversary. Exec mode runs real commands on your
   host/container with your privileges (and `sudo` when available).
-- **Target scope is best-effort.** It blocks out-of-scope IPv4/IPv6 literals and
-  hostnames, but can be bypassed by decimal/hex/octal IP encodings, by names
-  that resolve out of scope, or by tools that take targets from a file. Treat
-  scope as defense-in-depth, not a boundary. Enforce real scope at the network
-  layer too.
+- **Target scope is best-effort, but fail-closed.** When a scope is set, a
+  command is refused if it targets an out-of-scope host, hides the target behind
+  shell substitution/indirection (`$(...)`, backticks, `${...}`), or pipes a
+  network fetch into a shell/interpreter. Decimal/hex/octal IP encodings are
+  decoded before the check, and single-label / `user@host` targets are flagged.
+  GitHub is no longer auto-exempt (opt back in per host with
+  `GRIMOIRE_SCOPE_ALLOW`). It still resolves nothing at runtime, so a name that
+  *resolves* out of scope, or a target read from a file, can slip past - enforce
+  real scope at the network layer too. (`test_runner_scope_bypasses_closed`.)
 - **Indirect prompt injection.** A poisoned indexed doc can contain instructions
   the AI may follow. In `auto` mode (no per-call approval) this can lead to
   unintended installs/commands. **Recommended posture: `read` for knowledge

@@ -4,6 +4,8 @@
 
 > by [Penthertz](https://penthertz.com) - part of the RF-Swift toolkit
 
+[![CI](https://github.com/PentHertz/grimoire/actions/workflows/ci.yml/badge.svg)](https://github.com/PentHertz/grimoire/actions/workflows/ci.yml)
+
 Grimoire clones a curated set of security knowledge bases, indexes all of their
 markdown/YAML into a single full-text search index, and serves a fast web UI.
 Type `ssrf`, `xss`, `sql`, `kerberoast`, `sudo`, `jwt`, ... and it instantly
@@ -61,7 +63,7 @@ Curated in [`sources.yaml`](sources.yaml), grouped by category:
 
 | Category | Sources |
 |---|---|
-| `wikis` | HackTricks, HackTricks Cloud, PayloadsAllTheThings, The Hacker Recipes, six2dez Pentest Book, RedTeam-Tools |
+| `wikis` | HackTricks, HackTricks Cloud, PayloadsAllTheThings, The Hacker Recipes, six2dez Pentest Book, RedTeam-Tools, Awesome Cybersecurity Handbooks |
 | `ad-internal` | InternalAllTheThings, ired.team, OCD mindmaps |
 | `c2` | Sliver |
 | `hardware-iot` | HardwareAllTheThings |
@@ -113,7 +115,7 @@ See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the day-to-day commands and sea
 
 | Command | What it does |
 |---|---|
-| `fetch [--only N...]` | git clone/pull sources into `data/sources/` |
+| `fetch [--only N...] [--prune-git]` | git clone/pull sources into `data/sources/` (keeps `.git` for fast incremental updates; `--prune-git` drops it to save ~40% space) |
 | `build` | optional native mdBook/mkdocs render into `data/build/` |
 | `index [--force]` | incremental FTS5 index at `data/index.db` (only re-indexes sources whose git commit / content changed; `--force` = full rebuild) |
 | `serve [--host H --port P]` | start the web search UI |
@@ -148,12 +150,20 @@ All SQL is funnelled through `model.Index`, where every statement is
 parameterized (values are bound, never string-formatted), and free-text queries
 pass through `_fts_query` (alphanumeric prefix tokens only) before reaching a
 MATCH expression - so a poisoned query can break out of neither the SQL nor the
-FTS5 grammar. The test suite includes dedicated SQLi, XSS, SSTI, CSRF, and
-path-traversal cases (`python3 -m unittest`).
+FTS5 grammar. Rendered markdown is sanitized with `nh3` beneath a strict CSP
+nonce (two XSS layers). The test suite includes dedicated SQLi, XSS, SSTI, CSRF,
+clickjacking, path-traversal, source-name-traversal, exec-scope-bypass, and
+MCP-DoS cases (`python3 -m unittest`), run in CI across Python 3.9-3.12.
 
 ## How it works
 
-- **fetch** shallow-clones each `sources.yaml` repo into `data/sources/<name>`.
+- **fetch** shallow-clones each `sources.yaml` repo into `data/sources/<name>`,
+  sparse-checking-out only a source's `docs_dir` subtree when one is set - so a
+  huge tool repo never lands whole on disk. `.git` is kept by default so
+  `update` can `git pull` incrementally; pass `--prune-git` (or set
+  `GRIMOIRE_PRUNE_GIT=1`) to drop it and reclaim ~40% of each checkout (the doc
+  viewer and the GitHub origin links don't need it), at the cost of re-cloning
+  on the next fetch. Ideal when baking a never-updated offline/RF-Swift image.
 - **index** walks every `*.md` / `*.markdown` / `*.mdx` / `*.rst` / `*.yml` /
   `*.yaml` file (`.rst` so Sphinx-documented projects contribute their *full*
   docs, not just the README) and stores it in a SQLite FTS5 table

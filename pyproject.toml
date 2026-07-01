@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grimoire-docs"
-version = "1.0.0"
+version = "1.1.0"
 description = "Offline pentest documentation aggregator + unified search, with an MCP server to attach an AI model."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -17,6 +17,10 @@ dependencies = [
     # `pipx install` ships it -- pipx ignores optional extras, which left
     # the viewer showing escaped plain text instead of rendered markdown.
     "markdown>=3.0",
+    # Sanitizes rendered markdown HTML as a second XSS layer beneath the doc
+    # CSP. Core (not an extra) so pipx installs ship the defense; the viewer
+    # still falls back to CSP-only if it is somehow absent.
+    "nh3>=0.2",
 ]
 
 [project.urls]

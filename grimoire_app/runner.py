@@ -38,14 +38,73 @@ _DENY = [
 ]
 _DENY_RE = re.compile("|".join(_DENY), re.I)
 
-# hosts that are never treated as "targets" for scope enforcement
-_SCOPE_IGNORE = {"127.0.0.1", "0.0.0.0", "localhost", "localhost.localdomain",
-                 "github.com", "raw.githubusercontent.com"}
+# Hosts never treated as "targets" for scope enforcement: loopback only. GitHub
+# is deliberately NOT exempt here - a scoped engagement should not get a free
+# fetch-and-exec/exfil channel to github.com/raw.githubusercontent.com. Operators
+# who genuinely need extra hosts exempt can list them (comma-separated) in
+# GRIMOIRE_SCOPE_ALLOW; fetch-piped-to-a-shell stays refused regardless.
+_SCOPE_IGNORE = {"127.0.0.1", "0.0.0.0", "::1", "::", "localhost", "localhost.localdomain"}
+_SCOPE_IGNORE |= {h.strip().lower()
+                  for h in os.environ.get("GRIMOIRE_SCOPE_ALLOW", "").split(",")
+                  if h.strip()}
 _HOST_RE = re.compile(
     r"\b((?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?|(?:[a-z0-9-]+\.)+[a-z]{2,})\b", re.I)
 # IPv6 literals (validated with ipaddress before we treat them as hosts, so this
 # never false-positives on ports/ints the way bare-integer parsing would).
 _IPV6_RE = re.compile(r"(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{0,4}:){2,}:?[0-9A-Fa-f]{0,4}")
+
+# Command substitution / indirection hides the real target from static scope
+# checking; when a scope is set we fail closed rather than allow an unverifiable
+# host. Backticks, $(...) and ${...} all count.
+_SUBST_RE = re.compile(r"\$\(|`|\$\{")
+# A network fetch piped into an interpreter is remote code execution / exfil.
+_PIPE_SHELL_RE = re.compile(
+    r"\b(?:curl|wget|fetch)\b[^|]*\|\s*(?:sudo\s+)?"
+    r"(?:ba|z|da|a|k)?sh\b|\b(?:curl|wget|fetch)\b[^|]*\|\s*(?:sudo\s+)?"
+    r"(?:python[0-9.]*|perl|ruby|node)\b", re.I | re.S)
+
+
+def _decode_ip(host):
+    """Canonical dotted-quad for the legacy integer/hex/octal IPv4 encodings that
+    curl/wget accept (e.g. 3232235521 or 0xC0A80001 -> 192.168.0.1), else None.
+    Lets an in-scope encoded IP still be recognised as in-scope."""
+    try:
+        if re.fullmatch(r"0[xX][0-9A-Fa-f]+", host):
+            v = int(host, 16)
+        elif re.fullmatch(r"0[0-7]+", host):
+            v = int(host, 8)
+        elif re.fullmatch(r"\d+", host):
+            v = int(host)
+        else:
+            return None
+        if 0 <= v <= 0xFFFFFFFF:
+            return str(ipaddress.IPv4Address(v))
+    except (ValueError, ipaddress.AddressValueError):
+        pass
+    return None
+
+
+def _authority_hosts(command):
+    """Host in every ``scheme://[user@]host[:port]`` and ``user@host`` position.
+    These are target positions, so we check them fail-closed - a single-label or
+    encoded host that the loose _HOST_RE never recognised is still caught."""
+    hosts = []
+    for m in re.finditer(r"://([^/\s?#]+)", command):
+        auth = m.group(1).rsplit("@", 1)[-1]          # drop any user[:pass]@
+        if auth.startswith("["):                       # [IPv6]:port
+            hosts.append(auth[1:auth.find("]")] if "]" in auth else auth[1:])
+        else:
+            hosts.append(auth.split(":")[0])
+    for m in re.finditer(r"(?:^|\s)[A-Za-z0-9_.\-]+@([A-Za-z0-9_.\-]+)", command):
+        hosts.append(m.group(1))                       # ssh/scp user@host
+    return [h for h in hosts if h]
+
+
+def _host_in_scope(host, scope):
+    h = host.strip("[]")
+    if h.lower() in _SCOPE_IGNORE:
+        return True
+    return _in_scope(_decode_ip(h) or h, scope)
 
 # A valid package / tool name: a leading alnum then alnum and . _ + - only.
 # Anything else (shell metacharacters, spaces) is refused before it can reach a
@@ -258,10 +317,16 @@ def out_of_scope_hosts(command, scope):
             ipaddress.ip_address(tok)
         except ValueError:
             continue
-        if tok.lower() in _SCOPE_IGNORE or tok in ("::1", "::"):
+        if tok.lower() in _SCOPE_IGNORE:
             continue
         if not _in_scope(tok, scope):
             bad.add(tok)
+    # Fail closed on target (URL / user@) host positions: anything not provably in
+    # scope is flagged, so encoded IPs and single-label hosts can't slip past the
+    # loose _HOST_RE above.
+    for host in _authority_hosts(command):
+        if not _host_in_scope(host, scope):
+            bad.add(host)
     return sorted(bad)
 
 def guard(command, scope=None):
@@ -271,6 +336,12 @@ def guard(command, scope=None):
     if _DENY_RE.search(command):
         return "refused: matches destructive-command denylist"
     if scope:
+        if _PIPE_SHELL_RE.search(command):
+            return ("refused: piping a network fetch into a shell/interpreter is not "
+                    "allowed under an engagement scope (remote code execution)")
+        if _SUBST_RE.search(command):
+            return ("refused: shell substitution/indirection ($(...), backticks, ${...}) "
+                    "hides the target host from scope checking")
         bad = out_of_scope_hosts(command, scope)
         if bad:
             return (f"refused: out-of-scope host(s) {', '.join(bad)} "

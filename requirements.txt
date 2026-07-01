@@ -1,5 +1,7 @@
-# Grimoire runtime deps (both small; the tool degrades gracefully without them):
+# Grimoire runtime deps (all small; the tool degrades gracefully without them):
 #   PyYAML   - parse sources.yaml
 #   markdown - render docs to HTML in the viewer (else shown as plain text)
+#   nh3      - sanitize rendered markdown HTML (2nd XSS layer under the doc CSP)
 PyYAML>=6.0
 markdown>=3.5
+nh3>=0.2

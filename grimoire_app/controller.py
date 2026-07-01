@@ -68,6 +68,10 @@ def make_handler():
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("X-Content-Type-Options", "nosniff")
+            # Block cross-origin framing so a clickjacking page can't overlay the UI
+            # and trigger the (custom-header-CSRF-protected) /api/update via the real
+            # button. SAMEORIGIN (not DENY) so the SPA can still iframe its own /doc.
+            self.send_header("X-Frame-Options", "SAMEORIGIN")
             for k, v in (headers or {}).items():
                 self.send_header(k, v)
             self.end_headers()
@@ -274,6 +278,9 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     f = sub.add_parser("fetch", help="clone/update all sources")
     f.add_argument("--only", nargs="*", help="limit to these source names")
+    f.add_argument("--prune-git", action="store_true",
+                   help="delete each source's .git after clone to save space (~40%%). "
+                        "Default keeps it for fast incremental `git pull` updates.")
     f.set_defaults(func=model.cmd_fetch)
     b = sub.add_parser("build", help="run native builders (optional)")
     b.set_defaults(func=model.cmd_build)
@@ -287,10 +294,14 @@ def main():
     a = sub.add_parser("all", help="fetch + index")
     a.add_argument("--only", nargs="*")
     a.add_argument("--force", action="store_true", help="full reindex")
+    a.add_argument("--prune-git", action="store_true",
+                   help="delete each source's .git after clone to save space")
     a.set_defaults(func=cmd_all)
     up = sub.add_parser("update", help="refresh docs: fetch + incremental index (alias of all)")
     up.add_argument("--only", nargs="*", help="limit to these source names")
     up.add_argument("--force", action="store_true", help="full reindex")
+    up.add_argument("--prune-git", action="store_true",
+                    help="delete each source's .git after clone to save space")
     up.set_defaults(func=cmd_all)
     cl = sub.add_parser("clean",
                         help="remove the search index (and optionally fetched sources)")

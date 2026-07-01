@@ -11,6 +11,7 @@ poisoned query can neither break out of the SQL nor the FTS5 grammar.
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -30,6 +31,18 @@ def _safe_repo_url(url):
     return re.match(r"^git@[A-Za-z0-9._-]+:", url) is not None
 
 
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _safe_source_name(name):
+    """A source name becomes a single path component under SRC_DIR - the clone
+    dir, the index base, and (with pruning) an ``shutil.rmtree`` target - so it
+    must be a plain slug: no separators, no ``.``/``..`` traversal, no absolute
+    path, and not ``.git`` (which the prune/checkout logic treats specially)."""
+    return (isinstance(name, str) and name not in ("", ".", "..", ".git")
+            and _SAFE_NAME.match(name) is not None)
+
+
 # --------------------------------------------------------------------------- #
 # Sources manifest
 # --------------------------------------------------------------------------- #
@@ -42,7 +55,34 @@ def load_sources():
     if not path.exists() and config.DEFAULT_SOURCES.exists():
         path = config.DEFAULT_SOURCES          # installed but not yet seeded
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return data.get("sources", [])
+    out = []
+    for s in data.get("sources", []):
+        if not _safe_source_name(s.get("name")):
+            # A path-unsafe name would let fetch/index/prune escape SRC_DIR; drop
+            # the entry everywhere at the single load seam (warn once per name).
+            nm = s.get("name") if isinstance(s, dict) else s
+            if nm not in _WARNED_NAMES:
+                print(f"[!] skipping source with unsafe name: {nm!r}")
+                _WARNED_NAMES.add(nm)
+            continue
+        out.append(s)
+    return out
+
+
+_WARNED_NAMES = set()
+
+
+def _sparse_paths(s):
+    """Which paths to sparse-checkout for a source: an explicit ``sparse:`` list
+    wins; otherwise a markdown source's ``docs_dir`` (so a huge tool repo is
+    scoped to just its docs subtree and never lands whole on disk); otherwise
+    None = clone the whole repo. Native-build sources are left un-scoped because
+    their builder needs the repo root (book.toml / mkdocs.yml / etc.)."""
+    if s.get("sparse"):
+        return s["sparse"]
+    if s.get("docs_dir") and s.get("build", "markdown") == "markdown":
+        return [s["docs_dir"]]
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -73,7 +113,32 @@ def _gh_org_repos(org):
     print(f"[!] {org}: could not list repos ({last})")
     return []
 
-def _fetch_org(name, org, dest):
+def _prune_git(dest: Path):
+    """Delete a checkout's .git to reclaim ~40% of its footprint. Incremental
+    reindex still works (_source_rev falls back to a content hash); only `git
+    pull` updates are lost, so a later fetch re-clones instead."""
+    shutil.rmtree(dest / ".git", ignore_errors=True)
+
+
+def _clone_repo(name, repo, dest, sparse) -> bool:
+    """Shallow-clone repo into dest, sparse-checking-out only `sparse` paths when
+    given (blobless). Returns True on a successful clone."""
+    if sparse:
+        print(f"[+] {name}: sparse cloning {repo} (paths: {', '.join(sparse)})")
+        if subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none",
+                           "--sparse", repo, str(dest)], check=False).returncode != 0:
+            return False
+        # `--` terminates options so a sparse path beginning with `-` can't be
+        # parsed as a flag (e.g. --no-cone) to sparse-checkout.
+        subprocess.run(["git", "-C", str(dest), "sparse-checkout", "set", "--", *sparse],
+                       check=False)
+        return True
+    print(f"[+] {name}: cloning {repo}")
+    return subprocess.run(["git", "clone", "--depth", "1", repo, str(dest)],
+                          check=False).returncode == 0
+
+
+def _fetch_org(name, org, dest, prune=False):
     dest.mkdir(parents=True, exist_ok=True)
     repos = _gh_org_repos(org)
     print(f"[+] {name}: org {org} -> {len(repos)} repos")
@@ -82,11 +147,14 @@ def _fetch_org(name, org, dest):
             print(f"[!] {name}: skipping unsafe repo URL {url!r}")
             continue
         sub = dest / Path(url).stem
-        if sub.exists():
+        if (sub / ".git").is_dir():
             subprocess.run(["git", "-C", str(sub), "pull", "--ff-only"], check=False)
-        else:
-            subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none", url, str(sub)],
-                           check=False)
+            continue
+        if sub.exists():              # previously pruned (no .git): re-clone
+            shutil.rmtree(sub, ignore_errors=True)
+        if subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none", url,
+                           str(sub)], check=False).returncode == 0 and prune:
+            _prune_git(sub)
 
 def _fetch_pdf(name, url, dest):
     import urllib.request
@@ -110,6 +178,7 @@ def cmd_fetch(args):
     config.SRC_DIR.mkdir(parents=True, exist_ok=True)
     sources = load_sources()
     only = set(args.only or [])
+    prune = config.PRUNE_GIT or getattr(args, "prune_git", False)
     for s in sources:
         name = s["name"]
         if only and name not in only:
@@ -119,7 +188,7 @@ def cmd_fetch(args):
             continue
         dest = config.SRC_DIR / name
         if s.get("org"):
-            _fetch_org(name, s["org"], dest)
+            _fetch_org(name, s["org"], dest, prune)
             continue
         if s.get("pdf_url"):
             _fetch_pdf(name, s["pdf_url"], dest)
@@ -131,23 +200,22 @@ def cmd_fetch(args):
         if not _safe_repo_url(repo):
             print(f"[!] {name}: unsafe repo URL scheme, skipping ({repo!r})")
             continue
-        sparse = s.get("sparse")  # list of paths to check out (e.g. ["doc"]) for huge repos
-        if dest.exists():
+        sparse = _sparse_paths(s)  # explicit sparse, else a markdown docs_dir subtree
+        if (dest / ".git").is_dir():
+            # Live checkout: refresh in place; drop .git afterwards only if pruning
+            # was requested (reclaims space from an existing keep-mode checkout).
             print(f"[~] {name}: updating")
             if sparse:
-                subprocess.run(["git", "-C", str(dest), "sparse-checkout", "set", *sparse],
+                subprocess.run(["git", "-C", str(dest), "sparse-checkout", "set", "--", *sparse],
                                check=False)
             subprocess.run(["git", "-C", str(dest), "pull", "--ff-only"], check=False)
-        elif sparse:
-            # Blobless + sparse + shallow: fetch only the doc subtree of a large repo.
-            print(f"[+] {name}: sparse cloning {repo} (paths: {', '.join(sparse)})")
-            if subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none",
-                               "--sparse", repo, str(dest)], check=False).returncode == 0:
-                subprocess.run(["git", "-C", str(dest), "sparse-checkout", "set", *sparse],
-                               check=False)
+            if prune:
+                _prune_git(dest)
         else:
-            print(f"[+] {name}: cloning {repo}")
-            subprocess.run(["git", "clone", "--depth", "1", repo, str(dest)], check=False)
+            if dest.exists():   # previously pruned (no .git) or partial: re-clone fresh
+                shutil.rmtree(dest, ignore_errors=True)
+            if _clone_repo(name, repo, dest, sparse) and prune:
+                _prune_git(dest)
     print("[=] fetch done")
 
 

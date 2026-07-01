@@ -3,9 +3,14 @@
 """View layer: turn raw docs into safe HTML and assemble CSP-hardened pages.
 
 Nothing here touches the database or the filesystem state; it only renders.
-All untrusted text (doc bodies, snippets, PDF text) is HTML-escaped, and pages
-ship a strict per-load CSP nonce so injected markup from a poisoned source can
-never execute.
+
+Two distinct XSS defenses, by content type: snippets, PDF text and YAML are
+HTML-escaped before insertion; rendered *markdown* bodies, by contrast, may
+carry raw HTML (python-markdown passes it through) and are neutralized instead
+by the strict per-load nonce CSP every page ships - `script-src 'nonce-<rnd>'`
+with no `unsafe-inline`, `object-src`/`base-uri`/`form-action` locked down - so
+injected markup from a poisoned source cannot execute. The CSP is therefore a
+load-bearing control for doc rendering, not just defense-in-depth.
 """
 import html
 import re as _re
@@ -61,14 +66,36 @@ def _obsidian_preprocess(text: str) -> str:
                    text)
     return text
 
+try:
+    import nh3 as _nh3
+    # Extend nh3's (ammonia) safe defaults with the few attributes our rendering
+    # relies on: heading/toc ids, and the tag/wikilink anchors' class + target.
+    _SANITIZE_TAGS = set(_nh3.ALLOWED_TAGS) | {"mark"}
+    _SANITIZE_ATTRS = {k: set(v) for k, v in _nh3.ALLOWED_ATTRIBUTES.items()}
+    _SANITIZE_ATTRS.setdefault("a", set()).update({"class", "target", "id"})
+    _SANITIZE_ATTRS.setdefault("img", set()).update({"class"})
+    for _t in ("h1", "h2", "h3", "h4", "h5", "h6", "span", "div", "code", "pre",
+               "table", "td", "th", "tr", "li", "ol", "ul", "p", "blockquote"):
+        _SANITIZE_ATTRS.setdefault(_t, set()).update({"class", "id"})
+except ImportError:                       # optional: the doc CSP is the primary guard
+    _nh3 = None
+
+def _sanitize_html(rendered: str) -> str:
+    """Second XSS layer under the doc CSP: strip <script>/<style>/<meta>, event
+    handlers and dangerous URL schemes from rendered markdown. No-op (CSP-only)
+    when nh3 isn't installed, matching the graceful markdown fallback."""
+    if _nh3 is None:
+        return rendered
+    return _nh3.clean(rendered, tags=_SANITIZE_TAGS, attributes=_SANITIZE_ATTRS)
+
 def _render_markdown(text: str) -> str:
     text = _obsidian_preprocess(text)
     try:
         import markdown
-        return markdown.markdown(
-            text, extensions=["fenced_code", "tables", "toc", "sane_lists"])
     except ImportError:
         return "<pre>" + html.escape(text) + "</pre>"
+    return _sanitize_html(markdown.markdown(
+        text, extensions=["fenced_code", "tables", "toc", "sane_lists"]))
 
 def _rewrite_assets(body: str, src: str, relpath: str) -> str:
     """Make a doc's relative links work in the viewer: rewrite relative <img>
@@ -203,7 +230,8 @@ def doc_page(fname: str, banner_html: str, body: str):
             f"<article class=doc>{banner_html}{body}</article>{script}")
     csp = ("default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; "
            f"script-src 'nonce-{nonce}'; object-src 'none'; frame-src 'none'; "
-           "connect-src 'none'; base-uri 'none'; form-action 'none'")
+           "connect-src 'none'; base-uri 'none'; form-action 'none'; "
+           "frame-ancestors 'self'")   # only the same-origin SPA may frame a doc
     return page, csp
 
 def index_page(template_html: str):
@@ -213,5 +241,6 @@ def index_page(template_html: str):
     page = template_html.replace("<script>", f'<script nonce="{nonce}">', 1)
     csp = ("default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; "
            f"script-src 'nonce-{nonce}'; connect-src 'self'; frame-src 'self'; "
-           "base-uri 'none'; form-action 'none'")
+           "base-uri 'none'; form-action 'none'; "
+           "frame-ancestors 'none'")   # the search UI (Update button) is never framed
     return page, csp
