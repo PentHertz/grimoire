@@ -27,9 +27,16 @@ embedded in RF-Swift.
 - **Unified search** over 20+ sources via SQLite **FTS5** with BM25 ranking -
   one query language regardless of how each repo is authored (mdBook, mkdocs,
   Jekyll, Hugo, plain markdown, YAML).
+- **Optional hybrid search** - install the `hybrid` extra to add `sqlite-vec`
+  vectors beside the FTS5 rows. Grimoire fuses BM25 and vector candidates with
+  reciprocal-rank fusion, while still falling back to pure BM25 when vector
+  support is not installed.
 - **Fully offline** once fetched and indexed. No telemetry, no external calls at
   runtime; see [docs/OFFLINE_BUNDLE.md](docs/OFFLINE_BUNDLE.md) for baking the
   fetched docs and FTS index into a VM/container image.
+- **Linked-doc mirroring** - optionally mirror outbound non-video writeups,
+  advisories, PDFs and articles from indexed docs into `data/linked/`, then
+  index them as `*-links` sources for fuller offline coverage.
 - **Spawnable web service** - `grimoire.py serve` (bind host/port; run it in the
   background or as a container service).
 - **Provenance** - every doc shows its source and a link to the **original file
@@ -121,8 +128,11 @@ See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the day-to-day commands and sea
 | Command | What it does |
 |---|---|
 | `fetch [--only N...]` | git clone/pull sources into `data/sources/` |
+| `links scan [--only N...]` | inventory outbound non-video links from fetched sources |
+| `links fetch [--only N...] [--depth D]` | mirror linked documents into `data/linked/` |
 | `build` | optional native mdBook/mkdocs render into `data/build/` |
 | `index [--force]` | incremental FTS5 index at `data/index.db` (only re-indexes sources whose git commit / content changed; `--force` = full rebuild) |
+| `hybrid status` | show optional `sqlite-vec` / vector-index status |
 | `serve [--host H --port P]` | start the web search UI |
 | `all [--only N...]` | `fetch` + `index` |
 | `update [--only N...]` | refresh docs: `fetch` + `index` (alias of `all`) |
@@ -161,6 +171,10 @@ path-traversal cases (`python3 -m unittest`).
 ## How it works
 
 - **fetch** shallow-clones each `sources.yaml` repo into `data/sources/<name>`.
+- **links fetch** optionally mirrors outbound non-video documents from fetched
+  sources into `data/linked/<source>-links/`; `--depth` follows links found in
+  mirrored pages, and these synthetic `*-links` sources are indexed by the
+  normal `index` command without modifying `sources.yaml`.
 - **index** walks every `*.md` / `*.markdown` / `*.mdx` / `*.rst` / `*.yml` /
   `*.yaml` file (`.rst` so Sphinx-documented projects contribute their *full*
   docs, not just the README) and stores it in a SQLite FTS5 table
@@ -168,6 +182,14 @@ path-traversal cases (`python3 -m unittest`).
   one query, regardless of authoring format. A source can pull extra extensions
   with `index_ext:` (e.g. `.ipynb`, `.json`) and, to dump the maximum, sources
   are indexed whole unless a `docs_dir:`/`sparse:` is set to scope a huge repo.
+- **hybrid search** is enabled automatically when the optional `sqlite-vec`
+  package is present. The same `index` command writes `doc_vectors` rows into
+  `data/index.db`, and the normal search path fuses BM25 and vector candidates.
+  By default Grimoire uses a deterministic local hash embedder so the vector
+  plumbing works without downloading a model. For real semantic retrieval, set
+  `GRIMOIRE_EMBED_COMMAND` to a local command that reads text on stdin and
+  prints a JSON float array; set `GRIMOIRE_VECTOR_DIM` to that model's dimension.
+  Check the active state with `grimoire hybrid status`.
 - **serve** is a dependency-free `http.server` exposing the UI plus a small API:
   - `GET /` search UI
   - `GET /api/search?q=&cat=` ranked JSON results (with highlighted snippets)

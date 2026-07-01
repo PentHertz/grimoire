@@ -19,6 +19,9 @@ dependencies = [
     "markdown>=3.0",
 ]
 
+[project.optional-dependencies]
+hybrid = ["sqlite-vec>=0.1.6"]
+
 [project.urls]
 Homepage = "https://penthertz.com"
 Repository = "https://github.com/PentHertz/grimoire"

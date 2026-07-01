@@ -8,10 +8,12 @@ markdown dependency required.
 Run:  cd grimoire && python3 -m unittest -v
 """
 import json
+import sys
 import tempfile
 import threading
 import types
 import unittest
+import urllib.parse
 import urllib.request
 import urllib.error
 from http.server import ThreadingHTTPServer
@@ -43,6 +45,18 @@ class TestPure(unittest.TestCase):
         self.assertEqual(model._title_of(Path("x.md"), "# Hello\nbody"), "Hello")
         self.assertEqual(model._title_of(Path("x.md"), "title: My Doc\n"), "My Doc")
         self.assertEqual(model._title_of(Path("foo-bar.md"), "no heading"), "foo bar")
+
+    def test_embed_command_reads_stdin_and_returns_json_vector(self):
+        old_dim, old_cmd = config.VECTOR_DIM, config.EMBED_COMMAND
+        try:
+            config.VECTOR_DIM = 2
+            config.EMBED_COMMAND = (
+                f"{sys.executable} -c "
+                "'import json, sys; sys.stdin.read(); print(json.dumps([1.0, 0.0]))'"
+            )
+            self.assertEqual(model._embed_text("hello"), [1.0, 0.0])
+        finally:
+            config.VECTOR_DIM, config.EMBED_COMMAND = old_dim, old_cmd
 
     def test_obsidian_preprocess(self):
         out = view._obsidian_preprocess(
@@ -159,6 +173,107 @@ class TestPure(unittest.TestCase):
         self.assertIn("/doc?src=src1&path=docs/other.md", out)       # md link -> /doc
         self.assertIn('href="https://x.com"', out)                   # external link kept
 
+    def test_link_mirror_fetches_html_and_indexes_synthetic_source(self):
+        tmp = Path(tempfile.mkdtemp(prefix="grimoire-links-test-"))
+        old = {k: getattr(config, k) for k in (
+            "DATA", "SRC_DIR", "BUILD_DIR", "LINK_DIR", "INDEX_DB", "INDEX_STATE",
+            "CUSTOM_DIR", "SOURCES_FILE")}
+        old_urlopen = urllib.request.urlopen
+
+        class FakeHeaders(dict):
+            def get(self, key, default=None):
+                return super().get(key, default)
+
+        class FakeResponse:
+            def __init__(self, url, body, ctype):
+                self._url = url
+                self._body = body
+                self.headers = FakeHeaders({"Content-Type": ctype,
+                                            "Content-Length": str(len(body))})
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def geturl(self):
+                return self._url
+
+            def read(self, n=-1):
+                if not self._body:
+                    return b""
+                if n is None or n < 0:
+                    n = len(self._body)
+                chunk, self._body = self._body[:n], self._body[n:]
+                return chunk
+
+        def fake_urlopen(req, timeout=20):
+            url = req.full_url if hasattr(req, "full_url") else str(req)
+            bodies = {
+                "https://example.test/writeup":
+                    (b"<html><head><title>Kernel UAF writeup</title></head>"
+                     b"<body><h1>Exploit notes</h1><p>use after free primitive</p>"
+                     b"<a href='https://example.test/child'>child</a>"
+                     b"</body></html>"),
+                "https://example.test/child":
+                    (b"<html><head><title>Child writeup</title></head>"
+                     b"<body><p>recursive heap grooming detail</p></body></html>"),
+            }
+            self.assertIn(url, bodies)
+            body = bodies[url]
+            return FakeResponse(url, body, "text/html; charset=utf-8")
+
+        try:
+            config.DATA = tmp / "data"
+            config.SRC_DIR = config.DATA / "sources"
+            config.BUILD_DIR = config.DATA / "build"
+            config.LINK_DIR = config.DATA / "linked"
+            config.INDEX_DB = config.DATA / "index.db"
+            config.INDEX_STATE = config.DATA / "index_state.json"
+            config.CUSTOM_DIR = tmp / "custom"
+            config.SOURCES_FILE = tmp / "sources.yaml"
+            src = tmp / "src"
+            src.mkdir(parents=True)
+            config.CUSTOM_DIR.mkdir(parents=True)
+            (src / "index.md").write_text(
+                "# Links\n"
+                "[writeup](https://example.test/writeup)\n"
+                "[video](https://www.youtube.com/watch?v=abc)\n")
+            config.SOURCES_FILE.write_text(
+                "sources:\n"
+                f"  - {{name: loc, title: Loc, type: local, path: {src}, "
+                "category: exploit-dev}\n")
+
+            links = model.scan_links(["loc"])
+            self.assertEqual([l["url"] for l in links], ["https://example.test/writeup"])
+
+            urllib.request.urlopen = fake_urlopen
+            model.cmd_links_fetch(types.SimpleNamespace(
+                only=["loc"], limit=0, depth=2, timeout=1, max_mb=1, force=False))
+            manifest = json.loads((config.LINK_DIR / "loc-links" / "manifest.json")
+                                  .read_text())
+            self.assertEqual(manifest["name"], "loc-links")
+            self.assertEqual(
+                sorted(d["url"] for d in manifest["documents"]),
+                ["https://example.test/child", "https://example.test/writeup"])
+            saved = next(d["path"] for d in manifest["documents"]
+                         if d["url"] == "https://example.test/writeup")
+            self.assertTrue((config.LINK_DIR / "loc-links" / saved).exists())
+
+            model.cmd_index(types.SimpleNamespace(force=True))
+            hits = model.search("primitive", limit=5)
+            self.assertTrue(any(h[0] == "loc-links" for h in hits))
+            child_hits = model.search("grooming", limit=5)
+            self.assertTrue(any(h[0] == "loc-links" for h in child_hits))
+            self.assertIn("Mirrored from", model.doc_text("loc-links", saved))
+        finally:
+            urllib.request.urlopen = old_urlopen
+            for k, v in old.items():
+                setattr(config, k, v)
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 # --------------------------------------------------------------------------- #
 # Integration + security tests (temp data dir + in-process server)
@@ -170,6 +285,7 @@ class TestServer(unittest.TestCase):
         config.DATA = self.tmp / "data"
         config.SRC_DIR = config.DATA / "sources"
         config.BUILD_DIR = config.DATA / "build"
+        config.LINK_DIR = config.DATA / "linked"
         config.INDEX_DB = config.DATA / "index.db"
         config.INDEX_STATE = config.DATA / "index_state.json"
         config.CUSTOM_DIR = self.tmp / "custom"
@@ -364,6 +480,17 @@ class TestServer(unittest.TestCase):
         # the bare term still works, proving search is functional
         self.assertTrue(any(r[0] == "loc" for r in model.search("magicword")))
 
+    def test_hybrid_status_shape(self):
+        status = model.vector_status()
+        for key in ("enabled", "error", "dim", "embedder", "vectors", "sqlite_vec"):
+            self.assertIn(key, status)
+        self.assertIsInstance(status["enabled"], bool)
+        self.assertGreater(status["dim"], 0)
+
+    def test_search_can_force_lexical_mode(self):
+        rows = model.search("magicword", hybrid=False)
+        self.assertTrue(any(r[0] == "loc" for r in rows))
+
     # ----- MCP server (stdio JSON-RPC) ----------------------------------------- #
     def _rpc(self, method, params=None, rid=1):
         return mcp.handle({"jsonrpc": "2.0", "id": rid, "method": method,
@@ -494,6 +621,61 @@ class TestServer(unittest.TestCase):
         # unknown tool -> JSON-RPC error
         self.assertIn("error", self._rpc("tools/call", {"name": "nope", "arguments": {}}))
         self.assertIn("error", self._rpc("does/not/exist"))
+
+
+class TestHybridSQLiteVec(unittest.TestCase):
+    def setUp(self):
+        try:
+            import sqlite_vec  # noqa: F401
+        except Exception as e:
+            self.skipTest(f"sqlite-vec unavailable: {e}")
+        self.tmp = Path(tempfile.mkdtemp(prefix="grimoire-hybrid-test-"))
+        self.old = {k: getattr(config, k) for k in (
+            "DATA", "SRC_DIR", "BUILD_DIR", "LINK_DIR", "INDEX_DB", "INDEX_STATE",
+            "CUSTOM_DIR", "SOURCES_FILE", "VECTOR_DIM", "EMBED_COMMAND")}
+        config.DATA = self.tmp / "data"
+        config.SRC_DIR = config.DATA / "sources"
+        config.BUILD_DIR = config.DATA / "build"
+        config.LINK_DIR = config.DATA / "linked"
+        config.INDEX_DB = config.DATA / "index.db"
+        config.INDEX_STATE = config.DATA / "index_state.json"
+        config.CUSTOM_DIR = self.tmp / "custom"
+        config.SOURCES_FILE = self.tmp / "sources.yaml"
+        config.VECTOR_DIM = 4
+        config.EMBED_COMMAND = None
+        config.CUSTOM_DIR.mkdir(parents=True)
+        self.src = self.tmp / "docsrc"
+        self.src.mkdir(parents=True)
+        (self.src / "target.md").write_text("# Vector Target\nlatent-only material")
+        (self.src / "other.md").write_text("# Other\nunrelated notes")
+        config.SOURCES_FILE.write_text(
+            "sources:\n"
+            f"  - {{name: loc, title: Loc, type: local, path: {self.src}, "
+            "category: exploit-dev}\n")
+        self.old_embed = model._embed_text
+
+    def tearDown(self):
+        model._embed_text = self.old_embed
+        for k, v in self.old.items():
+            setattr(config, k, v)
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_vector_only_hit_participates_in_search(self):
+        def fake_embed(text):
+            if "Vector Target" in text or text.strip() == "semantic query":
+                return [1.0, 0.0, 0.0, 0.0]
+            return [0.0, 1.0, 0.0, 0.0]
+
+        model._embed_text = fake_embed
+        model.cmd_index(types.SimpleNamespace(force=True))
+        status = model.vector_status()
+        self.assertTrue(status["enabled"])
+        self.assertEqual(status["vectors"], 2)
+
+        rows = model.search("semantic query", limit=3)
+        self.assertTrue(rows)
+        self.assertEqual(rows[0][3], "target.md")
 
 
 if __name__ == "__main__":

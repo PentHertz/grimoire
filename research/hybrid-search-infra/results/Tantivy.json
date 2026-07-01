@@ -1,0 +1,53 @@
+{
+  "name": "Tantivy",
+  "category": "embedded search library",
+  "license": "MIT.",
+  "primary_language": "Rust. Official Python bindings exist through tantivy-py, so Rust-native integration is strongest and Python integration is possible through a native extension.",
+  "bm25_support": "Native and first-class. Tantivy explicitly supports BM25 scoring and presents itself as Lucene-style full-text search.",
+  "vector_support": "[uncertain] No native vector field type, ANN index, or embedding store is documented in Tantivy itself. Practical vector search today appears to require a separate vector index or service; a long-running open feature request exists for approximate nearest neighbor/vector similarity search.",
+  "hybrid_search_support": "[uncertain] No native BM25-plus-vector fusion pipeline is documented. Hybrid search is practical only by pairing Tantivy with an external vector index and doing score fusion or reranking in application code.",
+  "deployment_model": "Embedded Rust library. Tantivy itself is not a search server or distributed system, though companion tools such as tantivy-cli exist for CLI or lightweight REST usage.",
+  "offline_fit": "Excellent fit for a fully local or offline Grimoire bundle. Tantivy is embedded, mmap-based, has very small startup time, and does not require a network service or hosted control plane.",
+  "scale_fit": "[uncertain] Strong fit for tens of thousands to low millions of chunks or documents on a single machine. It is designed for single-node Lucene-style indexing rather than distributed search; for larger distributed workloads, the maintainers point users to Quickwit.",
+  "operational_complexity": "Moderate. The core engine is simple compared with operating a server, but a Grimoire integration would need schema design, commit and reader-reload handling, delete-plus-reinsert updates, and either Rust embedding or Python native-extension packaging. Main failure modes are FFI or build friction, schema mistakes, and segment merge behavior rather than cluster operations.",
+  "python_cli_fit": "[uncertain] Reasonably good through tantivy-py for a Python CLI or MCP app, especially for local indexing and querying. The main trade-off is native-extension packaging: if no wheel is available for a target platform, Rust must be installed to build the bindings.",
+  "metadata_filtering": "Strong. Tantivy supports typed fields, JSON fields, hierarchical facets, range queries, fast fields/doc values, and aggregations, so filters on source, category, path, URL, chunk id, timestamps, and numeric metadata are straightforward if they are modeled into the schema.",
+  "indexing_incremental": "Strong. Tantivy supports incremental and multithreaded indexing, deletes, and merge policies with deletes. Documents become searchable after commit, and updates are handled as delete plus reindex rather than in-place mutation.",
+  "ranking_quality_notes": "Tantivy gives you solid lexical ranking out of the box with BM25, phrase queries, natural query parsing, facets, and range queries. It includes stemming for 17 Latin languages and points to third-party tokenizers for Chinese, Japanese, and Korean. For code-heavy or multilingual Grimoire content, tokenizer tuning will matter, and neural reranking or vector fusion would need to happen outside the core engine.",
+  "project_maturity": "High. The project dates back to 2016, the main repository has about 15.5k GitHub stars, docs.rs shows a current 0.26.1 release, and the README lists real users such as Etsy, ParadeDB, Nuclia, Humanfirst.ai, and Element. The ecosystem also includes official Python bindings and a benchmark harness.",
+  "security_privacy_notes": "Good privacy fit for offline use because Tantivy is an embedded local library with no required remote service, built-in auth layer, or always-on network dependency. The main security consideration is standard native-code and supply-chain risk from Rust crates or Python bindings, since Tantivy runs in-process rather than as a sandboxed external service.",
+  "pros": [
+    "Native BM25 and Lucene-style full-text search are already a direct match for Grimoire's lexical retrieval needs.",
+    "Excellent offline and local deployment story with mmap storage and very low startup latency.",
+    "Rich metadata filtering primitives through typed fields, JSON fields, facets, range queries, and fast fields.",
+    "Incremental indexing, deletes, and multithreaded ingestion are built in.",
+    "Official Python bindings make a Python CLI integration possible without introducing a separate search server."
+  ],
+  "cons": [
+    "No documented native vector index or ANN support, so hybrid retrieval needs an external vector system.",
+    "Hybrid score fusion and reranking must be implemented in Grimoire application code.",
+    "Python integration adds native-extension packaging and possible Rust toolchain requirements.",
+    "Updates are delete plus reindex rather than true in-place mutation.",
+    "Single-node library model is great for local use but not the right shape if Grimoire later wants distributed search."
+  ],
+  "recommendation": "Recommended as a strong Grimoire-native lexical engine candidate if the goal is to replace or augment the current offline lexical layer with a faster, richer Rust BM25 index. It is especially attractive for local bundles and structured metadata filtering. It is not a complete hybrid engine by itself, so the best fit is Tantivy for lexical retrieval plus a separate vector index for embeddings, with fusion or reranking done in Grimoire. If the team wants to stay pure-Python with minimal native packaging complexity, it is a good second-step option rather than the easiest first default.",
+  "sources": [
+    "https://github.com/quickwit-oss/tantivy",
+    "https://raw.githubusercontent.com/quickwit-oss/tantivy/main/README.md",
+    "https://docs.rs/crate/tantivy/latest",
+    "https://tantivy-search.github.io/bench/",
+    "https://tantivy-search.github.io/examples/deleting_updating_documents.html",
+    "https://tantivy-search.github.io/examples/faceted_search_with_tweaked_score.html",
+    "https://github.com/quickwit-oss/tantivy/issues/815",
+    "https://github.com/quickwit-oss/tantivy/releases/tag/0.26.1",
+    "https://github.com/quickwit-oss/tantivy-py",
+    "https://raw.githubusercontent.com/quickwit-oss/tantivy-py/master/README.md",
+    "https://pypi.org/project/tantivy/"
+  ],
+  "uncertain": [
+    "vector_support",
+    "hybrid_search_support",
+    "scale_fit",
+    "python_cli_fit"
+  ]
+}

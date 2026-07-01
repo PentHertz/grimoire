@@ -1,0 +1,42 @@
+{
+  "name": "qmd",
+  "category": "local agent index",
+  "license": "MIT for the installed package and the upstream repository.",
+  "primary_language": "TypeScript on Bun for the CLI and MCP server; practical integrations are through CLI subprocesses, MCP, and the newer upstream Node/Bun SDK rather than Python-native bindings.",
+  "bm25_support": "Native. QMD stores content in SQLite FTS5 and exposes BM25 full-text search through `qmd search`.",
+  "vector_support": "Native dense-vector search using local GGUF embedding models and a `sqlite-vec` index inside the same SQLite database. Embeddings are chunked per content segment and stored in `content_vectors` plus `vectors_vec`. No ANN-specific index such as HNSW is exposed in the installed CLI.",
+  "hybrid_search_support": "Native. `qmd query` runs BM25 and vector retrieval across the original and expanded queries, fuses them with reciprocal rank fusion, and reranks top candidates with a local cross-encoder reranker.",
+  "deployment_model": "Single-user local CLI on Bun with an embedded SQLite index, optional MCP server, and local model cache. It is not a separate search cluster or cloud service.",
+  "offline_fit": "Good after bootstrap, but not perfectly self-contained. Core search runs locally and the index lives in `~/.cache/qmd/index.sqlite`, but embedding, reranking, and query-expansion models are auto-downloaded from Hugging Face on first use unless they are pre-seeded into the cache.",
+  "scale_fit": "[uncertain] Strong for personal and team-local corpora in the tens of thousands of chunks and documents. Likely still usable into low six figures, but exact SQLite-based vector retrieval plus local reranking makes million-scale corpora a doubtful fit without benchmarking.",
+  "operational_complexity": "Moderate. Setup is easy for a personal CLI, but it adds Bun, node-llama-cpp, sqlite-vec, several local GGUF models, index refresh workflows, and MCP/model lifecycle concerns. Failure modes are mostly local runtime, model download, and index maintenance issues rather than distributed-service operations.",
+  "python_cli_fit": "Fair as an external tool, weaker as a library dependency. Grimoire could shell out to `qmd`, consume JSON output, or attach over MCP, but QMD is not Python-native and the installed snapshot here is an older GitHub-pinned CLI rather than a Python package.",
+  "metadata_filtering": "Limited natively. The installed CLI supports collection-level filtering with `--collection`; it does not expose rich arbitrary metadata filters for source, URL, path prefix, chunk id, tags, or structured fields.",
+  "indexing_incremental": "Good at the collection level. `qmd update` reindexes collections, updates changed documents by content hash, deactivates removed files, and cleans orphaned content and vectors. Deletes and renames are supported for collections, but there is no obvious transactional per-document indexing API for another application to drive directly.",
+  "ranking_quality_notes": "Ranking should be strong for markdown-heavy local corpora because QMD combines exact lexical matching, semantic retrieval, query expansion, contextual collection metadata, and cross-encoder reranking. It also keeps exact-match bias via RRF bonuses. Likely limitations are markdown-centric assumptions, limited filter expressiveness, dependence on local model quality, and slower vector or rerank stages on larger corpora.",
+  "project_maturity": "High momentum but still fast-moving. Upstream GitHub showed about 27.1k stars, 1.7k forks, recent pushes on June 24, 2026, and latest release `v2.5.3` published on May 29, 2026. The installed copy on this machine is an older pinned GitHub snapshot (`tobi-qmd-63028fd`), so local behavior may lag current upstream docs.",
+  "security_privacy_notes": "Strong local/privacy posture for steady-state search: documents, index, and reranking stay on-device, and MCP can run over stdio without a cloud dependency. The main caveat is that model artifacts are fetched from Hugging Face on first use unless pre-cached. Exposing the MCP server over HTTP or broad host bindings would widen the attack surface.",
+  "pros": [
+    "Excellent out-of-the-box hybrid relevance for local markdown corpora.",
+    "Single SQLite-backed local index with BM25, vectors, reranking, JSON output, and MCP.",
+    "Collection and context primitives match agent workflows and personal knowledge bases well.",
+    "Lower deployment burden than running a separate search daemon or vector database."
+  ],
+  "cons": [
+    "Bun and TypeScript are awkward in a Python-first Grimoire codebase.",
+    "Model downloads and local LLM runtime increase bundle size and bootstrap complexity.",
+    "Metadata filtering is much weaker than a document store or dedicated search engine.",
+    "It is better suited to markdown-centric personal knowledge bases than to a deeply embedded, filter-rich application index."
+  ],
+  "recommendation": "Use QMD as a benchmark or optional sidecar for high-quality local agent search, not as Grimoire's default core index. It is attractive if Grimoire wants a subprocess or MCP-based hybrid search mode for personal markdown-like corpora, but it is a poor fit if the goal is a Python-native, deeply embedded, filter-rich index for Grimoire's broader offline corpus.",
+  "sources": [
+    "https://github.com/tobi/qmd",
+    "https://github.com/tobi/qmd/blob/main/README.md",
+    "https://github.com/tobi/qmd/blob/main/package.json",
+    "https://github.com/tobi/qmd/blob/main/LICENSE",
+    "https://github.com/tobi/qmd/releases/tag/v2.5.3"
+  ],
+  "uncertain": [
+    "scale_fit"
+  ]
+}

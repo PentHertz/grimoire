@@ -1,0 +1,44 @@
+name:
+  description: Project or product name.
+category:
+  description: Infrastructure category, such as embedded library, search server, vector database, or local agent index.
+license:
+  description: Open source license and any relevant license caveat.
+primary_language:
+  description: Main implementation language and expected integration language bindings.
+bm25_support:
+  description: Whether BM25/full-text search is native, partial, external-only, or absent.
+vector_support:
+  description: Vector similarity support, approximate nearest-neighbor support, and embedding storage model.
+hybrid_search_support:
+  description: Native or practical support for combining BM25 and vector search, including reranking/fusion.
+deployment_model:
+  description: Embedded library, single binary/server, container service, cloud-first, or other deployment shape.
+offline_fit:
+  description: Fit for a fully local/offline Grimoire bundle.
+scale_fit:
+  description: Likely fit for tens of thousands to millions of chunks and documents.
+operational_complexity:
+  description: Setup, runtime dependencies, background services, maintenance burden, and failure modes.
+python_cli_fit:
+  description: How cleanly it fits a Python CLI/MCP app like Grimoire.
+metadata_filtering:
+  description: Support for filtering by source, category, path, URL, chunk id, and other metadata.
+indexing_incremental:
+  description: Support for incremental indexing, deletes, updates, and rebuilds.
+ranking_quality_notes:
+  description: Known ranking strengths, limitations, rerankers, stemming/tokenization, or multilingual/code behavior.
+project_maturity:
+  description: Signals such as active maintenance, ecosystem adoption, docs, releases, and production usage.
+security_privacy_notes:
+  description: Local-only behavior, network dependencies, sandbox concerns, auth, and data exfiltration risks.
+pros:
+  description: Concise list of advantages for Grimoire.
+cons:
+  description: Concise list of disadvantages for Grimoire.
+recommendation:
+  description: Recommendation for whether and how to use it in Grimoire.
+sources:
+  description: URLs to primary documentation, repositories, release/license pages, or benchmark/evaluation material used.
+uncertain:
+  description: Array of field names whose values are uncertain.

@@ -33,10 +33,19 @@ def _user_home():
 HOME = _user_home()
 DATA = Path(os.environ.get("GRIMOIRE_DATA", HOME / "data"))
 SRC_DIR = DATA / "sources"
+LINK_DIR = DATA / "linked"
 BUILD_DIR = DATA / "build"
 INDEX_DB = DATA / "index.db"
 INDEX_STATE = DATA / "index_state.json"   # per-source revision -> incremental reindex
 CUSTOM_DIR = HOME / "custom"
+
+# Optional hybrid search. When sqlite-vec is installed, Grimoire stores one
+# local vector per indexed document beside the existing FTS5 rows. The default
+# embedder is deterministic and dependency-free; set GRIMOIRE_EMBED_COMMAND to
+# a local model command that reads text on stdin and returns a JSON float list
+# for real semantic embeddings.
+VECTOR_DIM = int(os.environ.get("GRIMOIRE_VECTOR_DIM", "384"))
+EMBED_COMMAND = os.environ.get("GRIMOIRE_EMBED_COMMAND")
 
 # Shipped (read-only) resources: web UI + the default manifest seed.
 WEB_DIR = PKG_DIR / "web"
