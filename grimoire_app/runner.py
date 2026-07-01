@@ -141,17 +141,33 @@ def _detect_pkg_mgr():
             return name
     return None
 
+def _is_dir(p):
+    """`p.is_dir()` that returns False instead of raising when the path (or a
+    parent) is unreadable - e.g. probing /root/scripts as a non-root user."""
+    try:
+        return p.is_dir()
+    except OSError:
+        return False
+
+def _has_scripts(p):
+    """True if p is a readable directory holding at least one *.sh."""
+    try:
+        return p.is_dir() and any(p.glob("*.sh"))
+    except OSError:
+        return False
+
 def rfswift_scripts_dir():
     """Locate the RF-Swift install scripts: an explicit override, else the repo
-    layout (Grimoire ships inside RF-Swift-images), else common container paths."""
+    layout (Grimoire ships inside RF-Swift-images), else common container paths.
+    Candidate probing tolerates inaccessible paths (see _is_dir/_has_scripts)."""
     env = os.environ.get("GRIMOIRE_RFSWIFT_SCRIPTS")
-    if env and Path(env).is_dir():
+    if env and _is_dir(Path(env)):
         return Path(env)
     cand = config.ROOT.parent / "scripts"   # <repo>/grimoire/.. -> <repo>/scripts
-    if cand.is_dir() and any(cand.glob("*.sh")):
+    if _has_scripts(cand):
         return cand
     for p in ("/root/scripts", "/scripts", "/opt/rfswift/scripts"):
-        if Path(p).is_dir() and any(Path(p).glob("*.sh")):
+        if _has_scripts(Path(p)):
             return Path(p)
     return None
 

@@ -122,6 +122,24 @@ class TestPure(unittest.TestCase):
         for k in ("in_rfswift", "os_id", "pkg_manager", "is_root"):
             self.assertIn(k, env)
 
+    def test_detect_env_survives_unreadable_candidate(self):
+        # Probing a candidate scripts dir must not crash when the path is
+        # unreadable - e.g. /root/scripts as the non-root CI user, where is_dir()
+        # raises PermissionError instead of returning False.
+        import pathlib
+        orig = pathlib.Path.is_dir
+        def boom(self):
+            if str(self) == "/root/scripts":
+                raise PermissionError(13, "Permission denied")
+            return orig(self)
+        pathlib.Path.is_dir = boom
+        try:
+            res = runner.rfswift_scripts_dir()                # must not raise
+            self.assertTrue(res is None or isinstance(res, pathlib.Path))
+            self.assertIn("rfswift_scripts", runner.detect_env())   # nor here
+        finally:
+            pathlib.Path.is_dir = orig
+
     def test_runner_rejects_tool_name_injection(self):
         # a prompt-injected tool name must NEVER reach a shell command
         self.assertFalse(runner.valid_tool_name("x; touch /tmp/grimoire_PWNED"))

@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Version `1.0.0` -> `1.1.0` (package + MCP `serverInfo`).
 - `SECURITY.md` and `README.md` updated for the new controls and test coverage.
 
+### Fixed
+- **Environment detection crash as non-root.** `rfswift_scripts_dir()` probed
+  hardcoded candidate paths (incl. `/root/scripts`); as a non-root user that
+  `is_dir()` raised `PermissionError` and took down `detect_env()` /
+  `grimoire_plan_install`. Candidate probing now tolerates inaccessible paths.
+
 ### Security
 - **Source-name path traversal fixed.** A crafted/imported manifest `name`
   (`../x`, `/abs`, `.git`) is now rejected at load, so fetch / index / the
