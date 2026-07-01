@@ -1,0 +1,45 @@
+{
+  "name": "SQLite FTS5 plus sqlite-vec",
+  "category": "embedded SQLite stack",
+  "license": "SQLite FTS5 is part of SQLite and inherits SQLite's public-domain licensing model; sqlite-vec is dual-licensed MIT OR Apache-2.0.",
+  "primary_language": "The core stack is C at the SQLite layer, with straightforward integration from Python through the standard sqlite3 module and the sqlite-vec Python package.",
+  "bm25_support": "Native. FTS5 is a built-in SQLite virtual-table module with MATCH queries, tokenizers, phrase and prefix search, and the bm25() auxiliary ranking function.",
+  "vector_support": "Native through the sqlite-vec extension. Stable vec0 provides local vector storage and exact kNN search over float, int8, and bit vectors, with metadata and partition-key filtering. ANN support appears only in 0.1.10-alpha prereleases as of 2026-06-28, so production-ready ANN should be treated as unavailable today.",
+  "hybrid_search_support": "Practical but not native in one built-in operator. FTS5 candidate sets and vec0 kNN results can be combined with ordinary SQL CTEs, joins, and custom fusion formulas, and a local smoke test on 2026-06-28 confirmed this works cleanly in Python. There is no built-in reciprocal-rank fusion, learned reranker, or unified hybrid scorer, so the application owns fusion logic.",
+  "deployment_model": "Single-process embedded SQLite database plus one loadable extension. No daemon, cluster, or network service is required.",
+  "offline_fit": "Excellent. This is one of the strongest fits for a fully local/offline Grimoire bundle because lexical search, metadata, and vectors can all live inside local SQLite files without any external service.",
+  "scale_fit": "Strong for small to medium offline corpora and likely comfortable for tens of thousands to low hundreds of thousands of chunks on one machine. [uncertain] At the million-chunk end, stable sqlite-vec's exact-search model will likely need aggressive partitioning, looser latency targets, or a different ANN engine.",
+  "operational_complexity": "Very low by search-stack standards. FTS5 ships with SQLite, sqlite-vec loads as a local extension, and the whole system can live in one file. Main operational risks are native-extension packaging, SQLite version compatibility, write-path caveats such as missing INSERT OR REPLACE in stable vec0, and the need to implement hybrid score fusion in SQL or application code.",
+  "python_cli_fit": "Excellent for a Python CLI or MCP app. Python's built-in sqlite3 handles FTS5 cleanly, sqlite-vec publishes a small Python loader, and a local smoke test on SQLite 3.49.1 plus sqlite-vec v0.1.9 succeeded with FTS5, vec0, joins, metadata filters, deletes, and UPDATE.",
+  "metadata_filtering": "Good. Standard SQLite WHERE clauses handle relational metadata, and vec0 supports metadata columns, auxiliary columns, and partition keys. The practical design is to keep canonical document metadata in ordinary tables and join retrieval results back by row id or document id.",
+  "indexing_incremental": "Good with caveats. FTS5 supports incremental insert, update, delete, and external-content trigger patterns. In local testing, stable sqlite-vec v0.1.9 supported INSERT, DELETE, and UPDATE on vec0 rows, but INSERT OR REPLACE failed with a UNIQUE constraint; 0.1.10-alpha release notes mention upsert support landing there.",
+  "ranking_quality_notes": "Lexical quality inherits mature FTS5/BM25 behavior, which is strong for exact terms, identifiers, and phrase-heavy lookup. Vector quality depends mostly on the embedding model because sqlite-vec is a storage and retrieval layer rather than a ranking stack. Hybrid quality can be good for Grimoire-style retrieval, but candidate sizes and fusion weights must be tuned explicitly because there is no built-in hybrid scorer or semantic calibration layer.",
+  "project_maturity": "Mixed but acceptable. FTS5 is very mature and widely deployed as part of SQLite. sqlite-vec is active, documented, and packaged for multiple languages, but it is still pre-v1 and the releases page shows important fixes and ANN work still landing in 0.1.10-alpha as of 2026-03-31.",
+  "security_privacy_notes": "Strong privacy posture for local search because nothing requires a network service and all indexed content can remain on local disk. The main security trade-off is that sqlite-vec is a native loadable extension, so Grimoire would need to trust the packaged binary, pin versions carefully, and avoid loading untrusted extensions.",
+  "pros": [
+    "Very low operational complexity: one embedded database plus one extension, no daemon.",
+    "Excellent offline and local-first fit for a Grimoire bundle.",
+    "Mature BM25 and full-text stack through FTS5.",
+    "Straightforward Python integration with minimal moving parts.",
+    "Flexible SQL joins make metadata-aware hybrid retrieval easy to express."
+  ],
+  "cons": [
+    "No built-in hybrid scorer or reranking pipeline; application code must own fusion.",
+    "Stable sqlite-vec is exact-search first, so large-scale vector latency can become a bottleneck.",
+    "sqlite-vec is still pre-v1, with write and ANN capabilities evolving.",
+    "Native extension packaging adds binary compatibility and supply-chain considerations.",
+    "Less out-of-the-box ranking sophistication than dedicated search servers or vector databases."
+  ],
+  "recommendation": "Recommended as the lowest-operational-complexity hybrid baseline for Grimoire. Use ordinary SQLite tables for canonical documents and metadata, FTS5 for BM25 candidate generation, sqlite-vec vec0 for exact vector candidate generation, and SQL or application-side fusion for hybrid ranking. Reconsider only if Grimoire's corpus size or latency targets make exact vector search too slow.",
+  "sources": [
+    "https://www.sqlite.org/fts5.html",
+    "https://github.com/asg017/sqlite-vec",
+    "https://alexgarcia.xyz/sqlite-vec/python.html",
+    "https://alexgarcia.xyz/sqlite-vec/features/vec0.html",
+    "https://alexgarcia.xyz/sqlite-vec/features/knn.html",
+    "https://github.com/asg017/sqlite-vec/releases"
+  ],
+  "uncertain": [
+    "scale_fit"
+  ]
+}

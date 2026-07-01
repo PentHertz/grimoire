@@ -141,7 +141,7 @@ def make_handler():
                 body = view._rewrite_assets(
                     view._render_markdown(model._read_doc_text(f)), src, path)
             # Provenance: show the source and a link to the original upstream file.
-            meta = next((s for s in model.load_sources() if s.get("name") == src), None) or {}
+            meta = model.source_meta(src) or {}
             stitle = meta.get("title", src)
             cat = meta.get("category", "custom")
             repo = meta.get("repo")
@@ -196,6 +196,9 @@ def cmd_all(args):
     print(view.banner())
     model.cmd_fetch(args)
     model.cmd_index(args)
+
+def cmd_hybrid_status(args):
+    print(json.dumps(model.vector_status(), indent=2))
 
 
 def _validate_manifest(text, where):
@@ -280,6 +283,29 @@ def main():
     i = sub.add_parser("index", help="(re)build the search index (incremental)")
     i.add_argument("--force", action="store_true", help="full rebuild, ignore change detection")
     i.set_defaults(func=model.cmd_index)
+    links = sub.add_parser("links", help="scan/fetch outbound linked documents")
+    link_sub = links.add_subparsers(dest="links_cmd", required=True)
+    lscan = link_sub.add_parser("scan", help="list outbound non-video links in fetched sources")
+    lscan.add_argument("--only", nargs="*", help="limit to these source names")
+    lscan.add_argument("--json", action="store_true", help="emit link inventory as JSON")
+    lscan.set_defaults(func=model.cmd_links_scan)
+    lfetch = link_sub.add_parser("fetch", help="mirror outbound non-video linked documents")
+    lfetch.add_argument("--only", nargs="*", help="limit to these source names")
+    lfetch.add_argument("--limit", type=int, default=0,
+                        help="maximum links per source (default: no count cap)")
+    lfetch.add_argument("--depth", type=int, default=1,
+                        help="crawl depth from source docs (default: 1)")
+    lfetch.add_argument("--max-mb", type=float, default=25,
+                        help="maximum downloaded bytes per URL in MiB (default: 25)")
+    lfetch.add_argument("--timeout", type=int, default=20,
+                        help="per-URL timeout in seconds (default: 20)")
+    lfetch.add_argument("--force", action="store_true",
+                        help="refetch URLs even when already mirrored")
+    lfetch.set_defaults(func=model.cmd_links_fetch)
+    hy = sub.add_parser("hybrid", help="inspect optional BM25+vector search support")
+    hy_sub = hy.add_subparsers(dest="hybrid_cmd", required=True)
+    hst = hy_sub.add_parser("status", help="show sqlite-vec/vector index status")
+    hst.set_defaults(func=cmd_hybrid_status)
     s = sub.add_parser("serve", help="serve the web search UI")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)

@@ -1,0 +1,36 @@
+topic: hybrid-search-infra
+execution:
+  output_dir: ./research/hybrid-search-infra/results
+  batch_size: 4
+  items_per_agent: 1
+items:
+  - name: qmd
+    category: local agent index
+    description: Existing local CLI already installed here; supports BM25 search, vector search, hybrid query expansion/reranking, MCP, and offline models.
+  - name: Tantivy
+    category: embedded search library
+    description: Rust/Lucene-style full-text search library with BM25; evaluate as Grimoire-native lexical engine and hybrid base when paired with external vector index.
+  - name: LanceDB
+    category: embedded vector database
+    description: Open-source local vector database/table format; evaluate hybrid search options, Python integration, and offline bundle fit.
+  - name: SQLite FTS5 plus sqlite-vec
+    category: embedded SQLite stack
+    description: Single-process SQLite BM25/FTS plus local vector extension; evaluate lowest-operational-complexity hybrid search for Grimoire.
+  - name: Qdrant
+    category: vector database service
+    description: Open-source vector DB with hybrid/sparse vector capabilities; evaluate if a daemon is worth it for Grimoire.
+  - name: Weaviate
+    category: vector database service
+    description: Open-source vector database with BM25 and hybrid search; evaluate local/offline operation and operational complexity.
+  - name: Vespa
+    category: search engine platform
+    description: Open-source search/serving engine with lexical, vector, hybrid ranking and reranking; evaluate if too heavy or best-in-class.
+  - name: OpenSearch
+    category: search server
+    description: Open-source Elasticsearch fork with BM25 and k-NN/vector plugins; evaluate hybrid search and deployment burden.
+  - name: Meilisearch
+    category: search server
+    description: Lightweight open-source search server with experimental/vector search capabilities; evaluate if practical for hybrid Grimoire search.
+  - name: Typesense
+    category: search server
+    description: Lightweight open-source search server with vector/hybrid search support; evaluate operational simplicity and quality.

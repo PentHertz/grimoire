@@ -1,0 +1,52 @@
+{
+  "name": "LanceDB",
+  "category": "embedded vector database",
+  "license": "Apache-2.0 for the open-source LanceDB OSS repository; managed Enterprise and cloud offerings are separate commercial products.",
+  "primary_language": "Rust core with first-class Python, TypeScript, and Rust SDKs; Python is the strongest fit for Grimoire.",
+  "bm25_support": "Native BM25 full-text search via FTS indexes on string columns, with configurable tokenization, stemming, stop-word removal, and language-specific processing.",
+  "vector_support": "Native vector storage in Lance tables with exact kNN for smaller datasets and ANN indexes for larger ones. Official index types include IVF and IVF_HNSW with quantization options such as PQ, SQ, and RQ, plus distance metrics including cosine, dot, and L2.",
+  "hybrid_search_support": "Native hybrid search combines vector and BM25 full-text retrieval and reranks the merged results. LanceDB uses reciprocal rank fusion by default through RRFReranker and also supports custom rerankers, with the richest reranker support in Python.",
+  "deployment_model": "OSS mode is an embedded local library that opens local storage paths; the same overall data model also has a separate managed and distributed Enterprise deployment option.",
+  "offline_fit": "Good technical fit for a fully local bundle because LanceDB OSS runs embedded and can keep vectors, text, and metadata on local disk without requiring a search server. For Grimoire specifically, it is a heavier fit than the current SQLite FTS offline bundle and only makes sense if Grimoire intentionally adds vector or richer hybrid retrieval rather than staying text-only.",
+  "scale_fit": "Strong fit from tens of thousands into the low millions of chunks on a capable local machine, especially when vector, FTS, and scalar indexes are configured well. Larger local deployments are plausible but very workload-, index-, and hardware-dependent [uncertain].",
+  "operational_complexity": "Moderate. It is simpler than operating a separate search cluster because it is embedded, but it is materially more complex than SQLite FTS: schemas, vector dimensions, ANN index choices, rerankers, optimize/reindex cycles after mutations, and local disk growth all need active management.",
+  "python_cli_fit": "Very good. Python is a first-class SDK with Pydantic LanceModel support, PyArrow/Pandas/Polars ingestion paths, sync and async APIs, and built-in reranking hooks, so it fits a Python CLI or MCP-style application cleanly.",
+  "metadata_filtering": "Strong native metadata filtering with SQL-like predicates for plain queries, vector search, hybrid search, updates, and deletes. Scalar indexes can accelerate filters over fields like source, category, path, URL, timestamps, chunk IDs, and tag lists.",
+  "indexing_incremental": "Supports appends, updates, deletes, and merge_insert upserts. Incremental maintenance exists, but it is not fully hands-off: updated rows can fall out of indexes, soft deletes need optimize/compaction to reclaim storage, and index catch-up or rebuild steps may be needed after heavy writes.",
+  "ranking_quality_notes": "A major strength is that BM25, vector search, metadata filters, and reranking are all native in one engine. BM25 has tokenization and stemming controls, and default RRF is a sensible hybrid baseline. Main caveats are that selective filters can reduce recall or require nprobes/refine tuning, and Python currently has the richest reranker surface.",
+  "project_maturity": "Healthy and active open-source project with official docs, multi-SDK support, 10.7k GitHub stars, and recent releases as of June 25, 2026. It looks credible for serious use, but the release stream is still beta-heavy, so API churn risk is higher than for older embedded databases.",
+  "security_privacy_notes": "Local OSS usage can stay fully on-disk and serverless, which is good for privacy and offline use. Main exfiltration risk comes from optional remote embedding or reranking providers, or from switching to managed Enterprise/cloud paths; an offline deployment should use local models and avoid outbound provider calls.",
+  "pros": [
+    "Native BM25, vector, filtering, and hybrid retrieval in one embedded engine.",
+    "Strong Python ergonomics through Pydantic, PyArrow, Pandas, and Polars integrations.",
+    "No mandatory server process for OSS local deployments.",
+    "Good metadata filtering and scalar indexing story for source-aware retrieval.",
+    "Supports richer retrieval patterns than a plain SQLite FTS bundle."
+  ],
+  "cons": [
+    "Heavier runtime and indexing model than Grimoire's current SQLite FTS offline architecture.",
+    "Best value appears when vectors and reranking are part of the design, which may be beyond Grimoire's current scope.",
+    "Mutation workflows can require optimize or reindex steps to keep performance healthy.",
+    "Hybrid and reranking quality tuning adds operational and evaluation overhead.",
+    "Beta-heavy release cadence suggests some API and behavior churn."
+  ],
+  "recommendation": "Use LanceDB only if Grimoire wants an optional advanced local backend for native vector plus BM25 hybrid retrieval. It is a strong candidate for a separate experimental or premium local mode, but it is not the best default replacement for Grimoire's current lightweight offline SQLite FTS bundle.",
+  "sources": [
+    "https://docs.lancedb.com/",
+    "https://docs.lancedb.com/indexing/fts-index",
+    "https://docs.lancedb.com/search/hybrid-search",
+    "https://docs.lancedb.com/search/filtering",
+    "https://docs.lancedb.com/indexing",
+    "https://docs.lancedb.com/reranking",
+    "https://docs.lancedb.com/integrations/data/pydantic",
+    "https://docs.lancedb.com/tables/create",
+    "https://docs.lancedb.com/tables",
+    "https://docs.lancedb.com/tables/update",
+    "https://github.com/lancedb/lancedb",
+    "https://github.com/lancedb/lancedb/releases",
+    "https://github.com/lance-format/lance"
+  ],
+  "uncertain": [
+    "scale_fit"
+  ]
+}

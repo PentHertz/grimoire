@@ -25,10 +25,39 @@ See [MCP_TUTORIAL.md](MCP_TUTORIAL.md) for attaching Claude / Codex / Gemini and
 ./grimoire.py update                     # refresh everything: git pull all sources + reindex
 ./grimoire.py fetch                      # update all sources (git pull) only
 ./grimoire.py fetch --only hacktricks owasp-wstg
+./grimoire.py links scan --only pwn-notes
+./grimoire.py links fetch --only pwn-notes --depth 2 --max-mb 25
 ./grimoire.py index                      # incremental: only re-indexes changed sources
 ./grimoire.py index --force              # full rebuild from scratch
+./grimoire.py hybrid status              # optional sqlite-vec/vector status
 ./grimoire.py build                      # OPTIONAL native mdbook/mkdocs render
 ```
+
+`links fetch` mirrors documents linked by source files. It skips YouTube/video
+URLs, keeps per-URL size/time caps, stores provenance in `data/linked/`, and
+indexes mirrored content as `*-links` sources on the next `index`. By default it
+fetches direct links; add `--depth 2` or higher to crawl links found inside
+mirrored pages too.
+
+## Optional hybrid search
+
+Pure BM25 works out of the box. To add local vector candidates in the same
+SQLite index:
+
+```bash
+uv run --extra hybrid python -m grimoire_app index --force
+uv run --extra hybrid python -m grimoire_app hybrid status
+```
+
+Search keeps the same UI/API/MCP shape; Grimoire fuses FTS5 BM25 and vector
+candidate ranks internally. The default embedder is a deterministic local hash
+baseline for offline plumbing and tests. For real semantic retrieval, point
+`GRIMOIRE_EMBED_COMMAND` at a local model command that reads text on stdin and
+prints a JSON float list, and set `GRIMOIRE_VECTOR_DIM` to the model dimension.
+
+For an image or air-gapped runtime, build the corpus once with network access,
+then ship the fetched source trees plus the SQLite FTS index. See
+[OFFLINE_BUNDLE.md](OFFLINE_BUNDLE.md).
 
 You can also refresh from the web UI: click **Update docs** (top-right) - it
 git-pulls every source and rebuilds the index in the background, showing live

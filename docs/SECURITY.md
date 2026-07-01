@@ -65,6 +65,11 @@ understand before relying on it - especially the execution modes.
   invokes each source's own `mdbook`/`mkdocs` build, which can execute code/
   plugins defined in a poisoned repo. It is optional and not used by search
   (which reads raw markdown). Only run `build` on sources you trust.
+- **`grimoire links fetch` downloads untrusted web content.** It is a bounded
+  document mirror, not a browser sandbox: it skips YouTube/video URLs and applies
+  size/time caps, but remote HTML/PDF/text is still hostile input. Mirrored docs
+  are indexed and rendered under the same CSP/path-extension controls as cloned
+  sources. Review licenses before redistributing mirrored content.
 - **`serve` has no authentication.** It binds `127.0.0.1` by default. If you
   expose it (`--host 0.0.0.0`) put it behind a VPN/reverse proxy with auth -
   anyone who can reach it can search and read indexed docs and trigger updates.

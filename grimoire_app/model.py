@@ -9,13 +9,17 @@ query to alphanumeric prefix tokens before it can reach a MATCH expression, so a
 poisoned query can neither break out of the SQL nor the FTS5 grammar.
 """
 import json
+import hashlib
+import math
 import os
 import re
+import shlex
 import sqlite3
 import subprocess
 import sys
 import urllib.parse
 from pathlib import Path
+from html.parser import HTMLParser
 
 from . import config
 
@@ -43,6 +47,38 @@ def load_sources():
         path = config.DEFAULT_SOURCES          # installed but not yet seeded
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return data.get("sources", [])
+
+def _linked_sources():
+    """Return synthetic source entries for mirrored outbound-link documents.
+
+    Each mirrored source lives at data/linked/<source>-links with a manifest.json
+    written by `grimoire links fetch`. Keeping them synthetic avoids mutating the
+    user's sources.yaml while still making the normal index/doc/MCP path work.
+    """
+    out = []
+    root = config.LINK_DIR
+    if not root.exists():
+        return out
+    for manifest in sorted(root.glob("*/manifest.json")):
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        name = data.get("name") or manifest.parent.name
+        out.append({
+            "name": name,
+            "title": data.get("title") or name,
+            "category": data.get("category") or "linked",
+            "type": "linked",
+            "path": str(manifest.parent),
+            "docs_dir": "docs",
+        })
+    return out
+
+def all_sources():
+    return load_sources() + _linked_sources()
 
 
 # --------------------------------------------------------------------------- #
@@ -105,6 +141,354 @@ def _fetch_pdf(name, url, dest):
             fh.write(r.read())
     except Exception as e:
         print(f"[!] {name}: PDF download failed ({e})")
+
+
+# --------------------------------------------------------------------------- #
+# linked-document mirror
+# --------------------------------------------------------------------------- #
+_URL_RE = re.compile(r"https?://[^\s\]\)<>'\"`]+")
+_VIDEO_HOSTS = {
+    "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be",
+    "youtube-nocookie.com", "www.youtube-nocookie.com",
+}
+_VIDEO_EXT = {".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi", ".mp3", ".wav"}
+_DOC_EXT = {".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc", ".json", ".yaml", ".yml"}
+
+
+def _clean_url(url: str) -> str:
+    return (url or "").rstrip(".,;:!?)\"]}'")
+
+
+def _is_video_url(url: str) -> bool:
+    try:
+        p = urllib.parse.urlparse(url)
+    except Exception:
+        return True
+    host = (p.netloc or "").lower().split("@")[-1].split(":")[0]
+    if host in _VIDEO_HOSTS or host.endswith(".youtube.com"):
+        return True
+    return Path(p.path).suffix.lower() in _VIDEO_EXT
+
+
+def _iter_doc_links(base: Path, docs_dir=None, exts=None):
+    for f in _walk_text_files(base, docs_dir, exts or config.TEXT_EXT):
+        yield from _iter_file_links(base, f)
+
+
+def _iter_file_links(base: Path, f: Path):
+    try:
+        text = _read_doc_text(f)
+    except Exception:
+        return
+    rel = f.relative_to(base).as_posix()
+    for raw in _URL_RE.findall(text):
+        url = _clean_url(raw)
+        if url and not _is_video_url(url):
+            yield rel, url
+
+
+def _source_units_for_links(only=None):
+    selected = set(only or [])
+    for s in load_sources():
+        name = s["name"]
+        if selected and name not in selected:
+            continue
+        if s.get("type") == "local":
+            base = Path(s["path"]).expanduser()
+        else:
+            base = config.SRC_DIR / name
+        if not base.exists():
+            continue
+        yield (s, base, s.get("docs_dir"),
+               config.TEXT_EXT | {e.lower() for e in s.get("index_ext", [])})
+
+
+def scan_links(only=None):
+    """Return a deduped list of outbound, non-video document candidate links."""
+    seen, links = set(), []
+    for s, base, docs_dir, exts in _source_units_for_links(only):
+        for rel, url in _iter_doc_links(base, docs_dir, exts):
+            if url in seen:
+                continue
+            seen.add(url)
+            links.append({"source": s["name"], "path": rel, "url": url})
+    return links
+
+
+class _HTMLText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.title = ""
+        self._skip = 0
+        self._in_title = False
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in ("script", "style", "noscript", "svg"):
+            self._skip += 1
+        elif tag == "title":
+            self._in_title = True
+        elif tag == "a":
+            href = dict(attrs).get("href")
+            if href and href.startswith(("http://", "https://")):
+                self.parts.append(f" {href} ")
+        elif tag in ("p", "br", "div", "section", "article", "li", "h1", "h2", "h3",
+                     "h4", "h5", "h6", "tr"):
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in ("script", "style", "noscript", "svg") and self._skip:
+            self._skip -= 1
+        elif tag == "title":
+            self._in_title = False
+        elif tag in ("p", "div", "section", "article", "li", "h1", "h2", "h3",
+                     "h4", "h5", "h6", "tr"):
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if self._skip:
+            return
+        text = " ".join((data or "").split())
+        if not text:
+            return
+        if self._in_title and not self.title:
+            self.title = text
+        self.parts.append(text + " ")
+
+    def markdown(self):
+        lines = []
+        for line in "".join(self.parts).splitlines():
+            line = " ".join(line.split())
+            if line:
+                lines.append(line)
+        return "\n\n".join(lines)
+
+
+def _slug_host(url: str) -> str:
+    host = urllib.parse.urlparse(url).netloc.lower() or "unknown"
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", host).strip("._") or "unknown"
+
+
+def _url_ext(url: str, content_type: str) -> str:
+    path_ext = Path(urllib.parse.urlparse(url).path).suffix.lower()
+    ctype = (content_type or "").split(";", 1)[0].lower()
+    if ctype == "application/pdf" or path_ext == ".pdf":
+        return ".pdf"
+    if path_ext in _DOC_EXT:
+        return path_ext
+    if ctype in ("text/html", "application/xhtml+xml"):
+        return ".md"
+    if ctype.startswith("text/"):
+        return ".txt"
+    if ctype in ("application/json", "application/yaml", "text/yaml"):
+        return ".json" if "json" in ctype else ".yaml"
+    return path_ext if path_ext in _DOC_EXT else ".bin"
+
+
+def _download_url(url: str) -> str:
+    """Prefer raw document bytes for common code-hosting document links."""
+    p = urllib.parse.urlparse(url)
+    host = (p.netloc or "").lower()
+    parts = [x for x in p.path.split("/") if x]
+    if host == "github.com" and len(parts) >= 5 and parts[2] == "blob":
+        owner, repo, ref = parts[0], parts[1], parts[3]
+        path = "/".join(parts[4:])
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
+    return url
+
+
+def _read_response_limited(resp, max_bytes: int) -> bytes:
+    chunks, total = [], 0
+    while True:
+        chunk = resp.read(min(65536, max_bytes + 1 - total))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+        if total > max_bytes:
+            raise ValueError("too large")
+    return b"".join(chunks)
+
+
+def _markdown_provenance(title, url, linked_from, body):
+    title = title or urllib.parse.urlparse(url).netloc or "Linked document"
+    return (f"# {title}\n\n"
+            f"> Mirrored from: {url}\n"
+            f"> Linked from: {linked_from}\n\n"
+            f"{body.strip()}\n")
+
+
+def _fetch_link_doc(url: str, linked_from: str, out_dir: Path, timeout=20, max_mb=25):
+    import urllib.request
+    import hashlib
+    max_bytes = int(max_mb * 1024 * 1024)
+    fetch_url = _download_url(url)
+    req = urllib.request.Request(fetch_url, headers={"User-Agent": "grimoire"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        final_url = resp.geturl()
+        ctype = resp.headers.get("Content-Type", "")
+        clen = resp.headers.get("Content-Length")
+        if clen and int(clen) > max_bytes:
+            return {"url": url, "final_url": final_url, "status": "skipped-too-large"}
+        data = _read_response_limited(resp, max_bytes)
+
+    ext = _url_ext(final_url or url, ctype)
+    if ext == ".bin":
+        return {"url": url, "final_url": final_url, "status": "skipped-binary",
+                "content_type": ctype}
+
+    host_dir = out_dir / "docs" / _slug_host(final_url or url)
+    host_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256((final_url or url).encode("utf-8")).hexdigest()[:20]
+    out = host_dir / f"{digest}{ext}"
+
+    if ext == ".pdf":
+        out.write_bytes(data)
+    else:
+        text = data.decode("utf-8", errors="ignore")
+        if ext == ".md" and (ctype or "").split(";", 1)[0].lower() in ("text/html", "application/xhtml+xml"):
+            parser = _HTMLText()
+            parser.feed(text)
+            text = _markdown_provenance(parser.title, url, linked_from, parser.markdown())
+        else:
+            text = _markdown_provenance("", url, linked_from, text)
+        out.write_text(text, encoding="utf-8")
+    return {"url": url, "final_url": final_url, "status": "fetched",
+            "content_type": ctype, "path": out.relative_to(out_dir).as_posix(),
+            "linked_from": linked_from}
+
+
+def _queue_link(queue, queued, source, url, linked_from, depth):
+    if url in queued or _is_video_url(url):
+        return
+    queued.add(url)
+    queue.append({
+        "source": source,
+        "url": url,
+        "linked_from": linked_from,
+        "depth": depth,
+    })
+
+
+def _enqueue_child_links(queue, queued, source, out_dir, rec, depth_limit):
+    depth = int(rec.get("depth") or 1)
+    if depth >= depth_limit or not rec.get("path"):
+        return
+    saved = out_dir / rec["path"]
+    if not saved.exists() or saved.suffix.lower() == ".pdf":
+        return
+    for _, child_url in _iter_file_links(out_dir, saved):
+        _queue_link(queue, queued, source, child_url,
+                    f"{source}-links/{rec['path']}", depth + 1)
+
+
+def _write_link_manifest(manifest_path, source, meta, records, complete=False):
+    manifest = {
+        "name": f"{source}-links",
+        "title": f"{meta.get('title', source)} linked documents",
+        "category": meta.get("category", "linked"),
+        "source": source,
+        "complete": complete,
+        "documents": sorted(records.values(), key=lambda r: r.get("url", "")),
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True),
+                             encoding="utf-8")
+
+
+def cmd_links_scan(args):
+    links = scan_links(getattr(args, "only", None))
+    if getattr(args, "json", False):
+        print(json.dumps({"links": links}, indent=2))
+        return
+    by_source = {}
+    for link in links:
+        by_source[link["source"]] = by_source.get(link["source"], 0) + 1
+    for source, count in sorted(by_source.items()):
+        print(f"{source}: {count} links")
+    print(f"[=] {len(links)} non-video links found")
+
+
+def cmd_links_fetch(args):
+    depth_limit = max(1, int(getattr(args, "depth", 1)))
+    by_source = {}
+    for item in scan_links(args.only):
+        by_source.setdefault(item["source"], []).append({
+            "source": item["source"],
+            "url": item["url"],
+            "linked_from": f"{item['source']}/{item['path']}",
+            "depth": 1,
+        })
+
+    source_meta = {s["name"]: s for s in load_sources()}
+    config.LINK_DIR.mkdir(parents=True, exist_ok=True)
+    total_fetched = total_skipped = total_failed = 0
+    for source, items in sorted(by_source.items()):
+        meta = source_meta.get(source, {"name": source, "category": "linked"})
+        out_dir = config.LINK_DIR / f"{source}-links"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = out_dir / "manifest.json"
+        old = {}
+        complete = False
+        if manifest_path.exists():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                complete = bool(manifest.get("complete"))
+                for rec in manifest.get("documents", []):
+                    old[rec.get("url")] = rec
+            except Exception:
+                old = {}
+        if complete and not args.force:
+            print(f"[=] {source}-links: complete, skipping")
+            continue
+        records = dict(old)
+        queue = []
+        queued = set()
+        for item in items:
+            _queue_link(queue, queued, source, item["url"], item["linked_from"], 1)
+        fetched = skipped = failed = 0
+        processed = 0
+        print(f"[=] {source}-links: {len(queue)} seed links queued")
+        try:
+            while queue and (not args.limit or processed < args.limit):
+                item = queue.pop(0)
+                url = item["url"]
+                processed += 1
+                if url in records and records[url].get("status") == "fetched" and not args.force:
+                    skipped += 1
+                    _enqueue_child_links(queue, queued, source, out_dir, records[url], depth_limit)
+                    continue
+                linked_from = item["linked_from"]
+                try:
+                    rec = _fetch_link_doc(url, linked_from, out_dir,
+                                          timeout=args.timeout, max_mb=args.max_mb)
+                    rec["depth"] = item["depth"]
+                    records[url] = rec
+                    if rec["status"] == "fetched":
+                        fetched += 1
+                        _enqueue_child_links(queue, queued, source, out_dir, rec, depth_limit)
+                    else:
+                        skipped += 1
+                except Exception as e:
+                    records[url] = {"url": url, "status": "failed", "error": str(e),
+                                    "linked_from": linked_from, "depth": item["depth"]}
+                    failed += 1
+                if processed % 25 == 0:
+                    _write_link_manifest(manifest_path, source, meta, records)
+                    print(f"[=] {source}-links: {processed} processed, "
+                          f"{fetched} fetched, {skipped} skipped, {failed} failed, "
+                          f"{len(queue)} queued")
+        finally:
+            _write_link_manifest(manifest_path, source, meta, records)
+        _write_link_manifest(manifest_path, source, meta, records, complete=True)
+        total_fetched += fetched
+        total_skipped += skipped
+        total_failed += failed
+        print(f"[+] {source}-links: {fetched} fetched, {skipped} skipped, "
+              f"{failed} failed -> {out_dir}")
+    print(f"[=] links fetch done: {total_fetched} fetched, {total_skipped} skipped, "
+          f"{total_failed} failed")
 
 def cmd_fetch(args):
     config.SRC_DIR.mkdir(parents=True, exist_ok=True)
@@ -298,6 +682,105 @@ def _read_doc_text(f: Path) -> str:
 # --------------------------------------------------------------------------- #
 # index store (all SQL lives here; every statement is parameterized)
 # --------------------------------------------------------------------------- #
+def _embedding_tokens(text: str):
+    """Tokenize text for the built-in local embedding baseline.
+
+    This is intentionally simple and deterministic. Real semantic search should
+    set GRIMOIRE_EMBED_COMMAND to a local model command; the hash embedder exists
+    so the vector index is usable and testable without a network/model download.
+    """
+    words = re.findall(r"[A-Za-z0-9_]{2,}", (text or "").lower())
+    for w in words:
+        yield w
+    for a, b in zip(words, words[1:]):
+        yield f"{a}_{b}"
+
+
+def _hash_embedding(text: str, dim=None):
+    dim = int(dim or config.VECTOR_DIM)
+    vec = [0.0] * dim
+    for tok in _embedding_tokens(text):
+        digest = hashlib.blake2b(tok.encode("utf-8"), digest_size=8).digest()
+        n = int.from_bytes(digest, "little")
+        idx = n % dim
+        sign = -1.0 if (n >> 63) else 1.0
+        vec[idx] += sign
+    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+    return [v / norm for v in vec]
+
+
+def _embedder_name():
+    return "command" if config.EMBED_COMMAND else "hash-v1"
+
+
+def _embed_with_command(text: str):
+    """Run a local embedding command.
+
+    The command reads UTF-8 text on stdin and must print a JSON array of floats.
+    This keeps Grimoire offline/local while letting operators choose their own
+    model runtime (llama.cpp wrapper, sentence-transformers script, qmd bridge,
+    etc.) without binding the core package to a heavyweight ML dependency.
+    """
+    cmd = shlex.split(config.EMBED_COMMAND or "")
+    if not cmd:
+        raise ValueError("GRIMOIRE_EMBED_COMMAND is empty")
+    p = subprocess.run(
+        cmd,
+        input=text,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if p.returncode != 0:
+        raise RuntimeError((p.stderr or p.stdout or "embedding command failed").strip())
+    vec = json.loads(p.stdout)
+    if not isinstance(vec, list) or not vec:
+        raise ValueError("embedding command must return a non-empty JSON list")
+    return [float(x) for x in vec]
+
+
+def _embed_text(text: str):
+    vec = _embed_with_command(text) if config.EMBED_COMMAND else _hash_embedding(text)
+    if len(vec) != int(config.VECTOR_DIM):
+        raise ValueError(
+            f"embedding dimension {len(vec)} != GRIMOIRE_VECTOR_DIM={config.VECTOR_DIM}"
+        )
+    return vec
+
+
+def _sqlite_vec():
+    try:
+        import sqlite_vec
+        return sqlite_vec
+    except Exception:
+        return None
+
+
+def _rrf(rank: int, k=60):
+    return 1.0 / (k + rank)
+
+
+def _plain_snippet(body: str, raw: str, width=260):
+    """Snippet fallback for vector-only hits where FTS5 snippet() is unavailable."""
+    body = " ".join((body or "").split())
+    if not body:
+        return ""
+    toks = [t.lower() for t in re.findall(r"[A-Za-z0-9_]{2,}", raw or "")]
+    lower = body.lower()
+    pos = -1
+    for tok in toks:
+        pos = lower.find(tok)
+        if pos >= 0:
+            break
+    if pos < 0:
+        return body[:width]
+    start = max(0, pos - width // 3)
+    end = min(len(body), start + width)
+    prefix = "..." if start else ""
+    suffix = "..." if end < len(body) else ""
+    return prefix + body[start:end] + suffix
+
+
 class Index:
     """A thin, parameterized wrapper around the SQLite FTS5 index. Centralizing
     every query here is the 'nice method' for injection safety: callers pass
@@ -307,8 +790,13 @@ class Index:
               "tokenize='porter unicode61')")
     COLUMNS = ("source", "title", "category", "relpath", "body")
 
-    def __init__(self, path=None):
+    def __init__(self, path=None, vectors=True):
         self.db = sqlite3.connect(str(path or config.INDEX_DB))
+        self.vector_enabled = False
+        self.vector_error = None
+        self._sqlite_vec = None
+        self._vector_warned = False
+        self._vectors_requested = vectors
 
     def __enter__(self):
         return self
@@ -321,14 +809,86 @@ class Index:
             self.db.execute(self.SCHEMA)
         except sqlite3.OperationalError as e:
             sys.exit(f"[!] SQLite FTS5 not available in this Python build: {e}")
+        if self._vectors_requested:
+            self.create_vectors()
+
+    def create_vectors(self):
+        mod = _sqlite_vec()
+        if mod is None:
+            self.vector_error = "sqlite-vec not installed"
+            return False
+        try:
+            self.db.enable_load_extension(True)
+            mod.load(self.db)
+        except Exception as e:
+            self.vector_error = f"sqlite-vec load failed: {e}"
+            return False
+        finally:
+            try:
+                self.db.enable_load_extension(False)
+            except Exception:
+                pass
+        self._sqlite_vec = mod
+        dim = int(config.VECTOR_DIM)
+        embedder = _embedder_name()
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS vector_meta("
+            "key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        meta = dict(self.db.execute("SELECT key, value FROM vector_meta").fetchall())
+        existing = self.db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'doc_vectors'"
+        ).fetchone()
+        if existing and (
+            meta.get("dim") not in (None, str(dim)) or
+            meta.get("embedder") not in (None, embedder)
+        ):
+            self.db.execute("DROP TABLE doc_vectors")
+            existing = None
+        if not existing:
+            self.db.execute(
+                "CREATE VIRTUAL TABLE doc_vectors USING vec0("
+                f"embedding float[{dim}], source text, category text)"
+            )
+        self.db.execute(
+            "INSERT OR REPLACE INTO vector_meta(key, value) VALUES "
+            "('dim', ?), ('embedder', ?)",
+            (str(dim), embedder),
+        )
+        self.vector_enabled = True
+        return True
 
     def delete_source(self, name):
         self.db.execute("DELETE FROM docs WHERE source = ?", (name,))
+        if self.vector_enabled:
+            self.db.execute("DELETE FROM doc_vectors WHERE source = ?", (name,))
 
     def insert(self, source, title, category, relpath, body):
-        self.db.execute(
+        cur = self.db.execute(
             "INSERT INTO docs(source, title, category, relpath, body) "
             "VALUES (?, ?, ?, ?, ?)", (source, title, category, relpath, body))
+        rowid = cur.lastrowid
+        if self.vector_enabled:
+            self.insert_vector(rowid, source, category, f"{title}\n{relpath}\n{body}")
+        return rowid
+
+    def insert_vector(self, rowid, source, category, text):
+        try:
+            vec = _embed_text(text)
+            blob = self._sqlite_vec.serialize_float32(vec)
+            self.db.execute(
+                "INSERT INTO doc_vectors(rowid, embedding, source, category) "
+                "VALUES (?, ?, ?, ?)",
+                (int(rowid), blob, source, category),
+            )
+        except Exception as e:
+            # Do not break the offline lexical index because an optional embedder
+            # failed. The index status command reports this state.
+            self.vector_error = str(e)
+            if not self._vector_warned:
+                print(f"[!] vector indexing disabled for this run: {e}")
+                self._vector_warned = True
+            self.vector_enabled = False
 
     def has_rows(self, name) -> bool:
         return self.db.execute(
@@ -340,20 +900,38 @@ class Index:
     def count(self) -> int:
         return self.db.execute("SELECT count(*) FROM docs").fetchone()[0]
 
+    def vector_count(self) -> int:
+        if not self.vector_enabled:
+            return 0
+        try:
+            return self.db.execute("SELECT count(*) FROM doc_vectors").fetchone()[0]
+        except sqlite3.OperationalError:
+            return 0
+
+    def has_vector_rows(self, name) -> bool:
+        if not self.vector_enabled:
+            return True
+        try:
+            return self.db.execute(
+                "SELECT 1 FROM doc_vectors WHERE source = ? LIMIT 1", (name,)
+            ).fetchone() is not None
+        except sqlite3.OperationalError:
+            return False
+
     def commit(self):
         self.db.commit()
 
     def close(self):
         self.db.close()
 
-    def search(self, raw, cat=None, limit=60):
+    def _lexical_hits(self, raw, cat=None, limit=60):
         """Ranked full-text search. `raw` is sanitized by _fts_query; `cat` and
         `limit` are bound as parameters. Returns rows:
         (source, title, category, relpath, snippet-with-mark-sentinels)."""
         match = _fts_query((raw or "").strip())
         if not match:
             return []
-        sql = ("SELECT source, title, category, relpath, "
+        sql = ("SELECT rowid, source, title, category, relpath, "
                "snippet(docs, 4, char(2), char(3), ' ... ', 12) "
                "FROM docs WHERE docs MATCH ? ")
         params = [match]
@@ -367,16 +945,106 @@ class Index:
         except sqlite3.OperationalError:
             return []
 
+    def _vector_hit_ids(self, raw, cat=None, limit=60):
+        if not self.vector_enabled:
+            return []
+        try:
+            vec = _embed_text(raw)
+            blob = self._sqlite_vec.serialize_float32(vec)
+            # Fetch a wider pool, then apply the category filter through docs.
+            # This avoids relying on sqlite-vec metadata-filter planner details.
+            pool = max(int(limit) * (4 if cat else 1), int(limit))
+            rows = self.db.execute(
+                "SELECT rowid, distance FROM doc_vectors "
+                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+                (blob, pool),
+            ).fetchall()
+        except Exception as e:
+            self.vector_error = str(e)
+            return []
+        if not cat:
+            return [(int(r[0]), float(r[1])) for r in rows]
+        out = []
+        for rowid, distance in rows:
+            got = self.db.execute(
+                "SELECT 1 FROM docs WHERE rowid = ? AND category = ?",
+                (int(rowid), cat),
+            ).fetchone()
+            if got:
+                out.append((int(rowid), float(distance)))
+                if len(out) >= limit:
+                    break
+        return out
+
+    def _rows_by_id(self, ids, raw):
+        if not ids:
+            return {}
+        clean_ids = [int(x) for x in ids]
+        placeholders = ",".join("?" for _ in clean_ids)
+        rows = self.db.execute(
+            f"SELECT rowid, source, title, category, relpath, body "
+            f"FROM docs WHERE rowid IN ({placeholders})",
+            clean_ids,
+        ).fetchall()
+        return {
+            int(rowid): (source, title, category, relpath, _plain_snippet(body, raw))
+            for rowid, source, title, category, relpath, body in rows
+        }
+
+    def search(self, raw, cat=None, limit=60, hybrid=True):
+        """Ranked search, using BM25 plus optional sqlite-vec candidates.
+
+        The return shape remains the legacy tuple:
+        (source, title, category, relpath, snippet-with-mark-sentinels).
+        """
+        limit = int(limit)
+        pool = max(limit * 4, 60)
+        lexical = self._lexical_hits(raw, cat, pool)
+        if not hybrid:
+            return [r[1:] for r in lexical[:limit]]
+
+        vector = self._vector_hit_ids(raw, cat, pool)
+        if not vector:
+            return [r[1:] for r in lexical[:limit]]
+
+        scores = {}
+        rowdata = {}
+        for rank, row in enumerate(lexical, 1):
+            rowid = int(row[0])
+            scores[rowid] = scores.get(rowid, 0.0) + _rrf(rank)
+            rowdata[rowid] = row[1:]
+        for rank, (rowid, _distance) in enumerate(vector, 1):
+            scores[rowid] = scores.get(rowid, 0.0) + _rrf(rank)
+
+        missing = [rowid for rowid in scores if rowid not in rowdata]
+        rowdata.update(self._rows_by_id(missing, raw))
+        ordered = sorted(scores, key=lambda r: (-scores[r], r))
+        return [rowdata[rowid] for rowid in ordered if rowid in rowdata][:limit]
+
 
 def _fts_query(raw: str) -> str:
     # Build a safe FTS5 MATCH expression: quote each token, prefix-match.
     toks = [t for t in "".join(c if c.isalnum() else " " for c in raw).split() if t]
     return " ".join(f'"{t}"*' for t in toks)
 
-def search(raw, cat=None, limit=60):
+def search(raw, cat=None, limit=60, hybrid=True):
     """Convenience: open the default index, run a parameterized search, close."""
     with Index() as idx:
-        return idx.search(raw, cat, limit)
+        idx.create_vectors()
+        return idx.search(raw, cat, limit, hybrid=hybrid)
+
+
+def vector_status():
+    with Index() as idx:
+        ok = idx.create_vectors()
+        return {
+            "enabled": bool(ok),
+            "error": idx.vector_error,
+            "dim": int(config.VECTOR_DIM),
+            "embedder": _embedder_name(),
+            "vectors": idx.vector_count(),
+            "sqlite_vec": bool(idx._sqlite_vec),
+        }
 
 
 # --------------------------------------------------------------------------- #
@@ -445,6 +1113,9 @@ def cmd_index(args):
                   s.get("docs_dir"),
                   config.TEXT_EXT | {e.lower() for e in s.get("index_ext", [])})
                  for s in load_sources()]
+        units += [(s["name"], s.get("category", "linked"), Path(s["path"]),
+                   s.get("docs_dir"), config.TEXT_EXT | {".txt", ".json", ".adoc"})
+                  for s in _linked_sources()]
         if config.CUSTOM_DIR.exists():
             units.append(("custom", "custom", config.CUSTOM_DIR, None, config.TEXT_EXT))
 
@@ -453,7 +1124,8 @@ def cmd_index(args):
                 continue
             rev = _source_rev(base, docs_dir, exts)
             new_state[name] = rev
-            if not full and state.get(name) == rev and idx.has_rows(name):
+            if (not full and state.get(name) == rev and idx.has_rows(name)
+                    and idx.has_vector_rows(name)):
                 print(f"[=] {name}: unchanged, skipping")
                 skipped += 1
                 continue
@@ -469,11 +1141,18 @@ def cmd_index(args):
                 print(f"[-] {src}: removed (no longer a source)")
         idx.commit()
         total = idx.count()
+        vectors = idx.vector_count()
+        vector_error = idx.vector_error
     finally:
         idx.close()
     config.INDEX_STATE.write_text(json.dumps(new_state, indent=0))
     print(f"[=] index done: {reindexed} reindexed, {skipped} unchanged, "
           f"{total} docs total -> {config.INDEX_DB}")
+    if vectors:
+        print(f"[=] vector index: {vectors} embeddings ({_embedder_name()}, "
+              f"{config.VECTOR_DIM} dims)")
+    elif vector_error:
+        print(f"[=] vector index disabled: {vector_error}")
 
 
 def _path_size(p: Path) -> int:
@@ -517,7 +1196,7 @@ def cmd_clean(args):
     else:
         targets = [config.INDEX_DB, config.INDEX_STATE]
         if drop_sources:
-            targets += [config.SRC_DIR, config.BUILD_DIR]
+            targets += [config.SRC_DIR, config.BUILD_DIR, config.LINK_DIR]
 
     existing = [t for t in targets if t.exists()]
     if not existing:
@@ -548,9 +1227,10 @@ def _resolve_doc(source: str, relpath: str):
     if source == "custom":
         base = config.CUSTOM_DIR
     else:
-        for s in load_sources():
+        for s in all_sources():
             if s["name"] == source:
                 base = (Path(s["path"]).expanduser() if s.get("type") == "local"
+                        else Path(s["path"]) if s.get("type") == "linked"
                         else config.SRC_DIR / source)
                 break
         else:
@@ -566,10 +1246,16 @@ def _resolve_doc(source: str, relpath: str):
 def categories():
     """Category -> [{name, title}] for the filter chips."""
     cats = {}
-    for s in load_sources():
+    for s in all_sources():
         cats.setdefault(s.get("category", "other"), []).append(
             {"name": s["name"], "title": s.get("title", s["name"])})
     return cats
+
+def source_meta(name: str):
+    for s in all_sources():
+        if s["name"] == name:
+            return s
+    return None
 
 def doc_text(source: str, relpath: str):
     """Return a doc's content as text (notebook -> markdown, pdf -> extracted
