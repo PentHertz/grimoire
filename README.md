@@ -34,10 +34,13 @@ embedded in RF-Swift.
   background or as a container service).
 - **Provenance** - every doc shows its source and a link to the **original file
   on GitHub**, so you always know where guidance came from.
-- **Rich rendering** - images display and relative `.md` links navigate inside
-  the viewer (relative `<img>`/links are rewritten to a guarded `/asset` / `/doc`
-  endpoint). Note: for sparse sources (e.g. Ghidra), images stored outside the
-  checked-out paths won't be present - widen the source's `sparse:` list if needed.
+- **Rich rendering** - markdown, reStructuredText (`.rst`, via docutils - so
+  Sphinx sources like PySDR render as documents, not raw directives), Jupyter
+  notebooks and PDFs all render to HTML; images display and relative `.md`/`.rst`
+  links navigate inside the viewer (relative `<img>`/links are rewritten to a
+  guarded `/asset` / `/doc` endpoint). Note: for sparse sources (e.g. Ghidra),
+  images stored outside the checked-out paths won't be present - widen the
+  source's `sparse:` list if needed.
 - **Copy-ready** - one-click copy buttons on every code/command block.
 - **OSINT note** - OSINT tools mostly target individuals; scope and document
   collection to what an engagement justifies (GDPR), especially for named people.

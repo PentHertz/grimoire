@@ -140,6 +140,11 @@ def make_handler():
                 # _read_doc_text unicode-decodes YAML so escaped accents/dashes
                 # (e.g. machine-generated framework files) render as real chars
                 body = "<pre>" + html.escape(model._read_doc_text(f)) + "</pre>"
+            elif f.suffix.lower() == ".rst":
+                # reStructuredText (Sphinx sources, e.g. PySDR): render with
+                # docutils, not markdown, or directives/links come out mangled.
+                body = view._rewrite_assets(
+                    view._render_rst(model._read_doc_text(f)), src, path)
             else:
                 # .ipynb is converted to markdown inside _read_doc_text
                 body = view._rewrite_assets(

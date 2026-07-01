@@ -97,6 +97,38 @@ def _render_markdown(text: str) -> str:
     return _sanitize_html(markdown.markdown(
         text, extensions=["fenced_code", "tables", "toc", "sane_lists"]))
 
+# reStructuredText (Sphinx sources like PySDR). Untrusted input, so file
+# insertion (`.. include::`) and raw passthrough (`.. raw:: html`) are disabled,
+# and errors are suppressed rather than rendered as ugly system-message blocks.
+_RST_SETTINGS = {
+    "file_insertion_enabled": False,
+    "raw_enabled": False,
+    "report_level": 5,          # don't emit error/warning blocks into the output
+    "halt_level": 5,            # never raise on a malformed directive
+    "input_encoding": "unicode",
+    "doctitle_xform": False,    # keep the first section title in the body
+    "sectsubtitle_xform": False,
+    "embed_stylesheet": False,
+    "syntax_highlight": "none",
+}
+
+def _render_rst(text: str) -> str:
+    """Render reStructuredText to HTML with docutils (so `.rst` sources render as
+    documents, not mangled markdown). Sanitized like markdown; falls back to
+    escaped text if docutils is absent or the source won't parse."""
+    try:
+        from docutils.core import publish_parts
+    except ImportError:
+        return "<pre>" + html.escape(text) + "</pre>"
+    try:
+        # `writer=<name>` is the modern form (docutils >= 0.21); `writer_name=`
+        # is deprecated and removed in docutils 2.0.
+        parts = publish_parts(text, writer="html5",
+                              settings_overrides=_RST_SETTINGS)
+    except Exception:
+        return "<pre>" + html.escape(text) + "</pre>"
+    return _sanitize_html(parts.get("html_body") or parts.get("fragment", ""))
+
 def _rewrite_assets(body: str, src: str, relpath: str) -> str:
     """Make a doc's relative links work in the viewer: rewrite relative <img>
     src to the /asset endpoint (so images display) and relative links to other

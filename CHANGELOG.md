@@ -5,6 +5,19 @@ All notable changes to Grimoire are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-07-01
+
+### Added
+- **Proper reStructuredText rendering.** `.rst` docs (Sphinx sources such as
+  PySDR) now render via `docutils` in the viewer instead of being mangled by the
+  markdown renderer - directives (`.. image::`), `` `text <url>`_ `` links and
+  section headings display correctly, with images rewritten to `/asset`.
+  Untrusted-safe: `.. raw::` / `.. include::` are disabled and the output is
+  nh3-sanitized. New dependency: `docutils>=0.21`.
+
+### Changed
+- Version `1.1.0` -> `1.1.1` (package + MCP `serverInfo`).
+
 ## [1.1.0] - 2026-07-01
 
 ### Added
@@ -62,5 +75,6 @@ mdBook/mkdocs builds; an MCP server (`mcp`) with read / assist / auto modes and
 a gated command runner; and a security test suite (SQLi, XSS, SSTI, CSRF,
 path-traversal).
 
+[1.1.1]: https://github.com/PentHertz/grimoire/releases/tag/v1.1.1
 [1.1.0]: https://github.com/PentHertz/grimoire/releases/tag/v1.1.0
 [1.0.0]: https://github.com/PentHertz/grimoire/releases/tag/v1.0.0

@@ -207,6 +207,34 @@ class TestPure(unittest.TestCase):
             self.assertNotIn(bad, low)               # active vectors removed
         self.assertIn("plain_ok", out)               # benign text preserved
 
+    def test_rst_rendered_as_document(self):
+        try:
+            import docutils  # noqa: F401
+        except ImportError:
+            self.skipTest("docutils not installed; .rst falls back to plain text")
+        out = view._render_rst(
+            ".. _usrp-chapter:\n\n"
+            "Python USRP\n###########\n\n"
+            ".. image:: ../_images/usrp.png\n   :alt: USRP\n\n"
+            "See the `Ettus <https://www.ettus.com/>`_ page.\n")
+        self.assertIn("<img", out)                            # directive -> <img>
+        self.assertIn('src="../_images/usrp.png"', out)       # relative src (rewritten later)
+        self.assertIn('href="https://www.ettus.com/"', out)   # `text <url>`_ -> link
+        self.assertNotIn(".. image::", out)                   # not shown literally
+        self.assertNotIn(".. _usrp-chapter:", out)            # target not shown literally
+
+    def test_rst_raw_html_directive_disabled(self):
+        # A poisoned .rst must not inject HTML via `.. raw:: html` (raw_enabled
+        # off) - and nh3 would strip it anyway.
+        try:
+            import docutils  # noqa: F401
+        except ImportError:
+            self.skipTest("docutils not installed")
+        out = view._render_rst(
+            "Title\n=====\n\n.. raw:: html\n\n   <script>alert(1)</script>\n\nok_text")
+        self.assertNotIn("<script", out.lower())
+        self.assertIn("ok_text", out)
+
     def test_rewrite_assets(self):
         body = ('<img src="pics/a.png"><img src="/repo/b.png">'
                 '<img src="https://x/c.png"><a href="other.md">n</a>'
@@ -325,6 +353,20 @@ class TestServer(unittest.TestCase):
         # the doc viewer renders it as HTML (fenced code -> <pre>/<code>), not JSON
         _, doc, _ = self._get("/doc?src=loc&path=nb.ipynb")
         self.assertNotIn("&quot;cell_type&quot;", doc.decode())
+
+    def test_rst_doc_rendered_and_assets_rewritten(self):
+        try:
+            import docutils  # noqa: F401
+        except ImportError:
+            self.skipTest("docutils not installed")
+        (self.src / "chapter.rst").write_text(
+            "Chapter\n=======\n\n.. image:: pics/a.png\n   :alt: fig\n\n"
+            "`link <https://x.test/>`_\n")
+        _, body, _ = self._get("/doc?src=loc&path=chapter.rst")
+        text = body.decode()
+        self.assertIn("/asset?src=loc&path=pics/a.png", text)   # img rewritten to /asset
+        self.assertIn('href="https://x.test/"', text)           # external link preserved
+        self.assertNotIn(".. image::", text)                    # rendered, not raw RST
 
     def test_yaml_doc_renders_decoded_unicode(self):
         # a framework-style YAML with escaped unicode must display as real chars

@@ -1,7 +1,9 @@
 # Grimoire runtime deps (all small; the tool degrades gracefully without them):
 #   PyYAML   - parse sources.yaml
 #   markdown - render docs to HTML in the viewer (else shown as plain text)
-#   nh3      - sanitize rendered markdown HTML (2nd XSS layer under the doc CSP)
+#   nh3      - sanitize rendered markdown/RST HTML (2nd XSS layer under the CSP)
+#   docutils - render reStructuredText (.rst) docs (Sphinx sources, e.g. PySDR)
 PyYAML>=6.0
 markdown>=3.5
 nh3>=0.2
+docutils>=0.21

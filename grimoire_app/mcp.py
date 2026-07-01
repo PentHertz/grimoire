@@ -19,7 +19,7 @@ import sys
 from . import context, model, runner
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "grimoire", "version": "1.1.0"}
+SERVER_INFO = {"name": "grimoire", "version": "1.1.1"}
 
 # Path to the operator's engagement context YAML (set by cmd_mcp at launch).
 CONTEXT_PATH = None
