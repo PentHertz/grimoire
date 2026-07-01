@@ -10,4 +10,4 @@ Split cleanly into MVC layers:
 
 The runnable entrypoint is ../grimoire.py, which simply calls controller.main().
 """
-__all__ = ["config", "model", "view", "controller", "mcp"]
+__all__ = ["config", "model", "view", "controller", "mcp", "converters"]

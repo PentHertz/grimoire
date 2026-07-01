@@ -57,6 +57,12 @@ sources:
     repo: https://github.com/A-poc/RedTeam-Tools
     category: wikis
     build: markdown
+  - name: cve
+    title: CVE list
+    repo: https://github.com/CVEProject/cvelistV5
+    category: wikis
+    docs_dir: cves
+    index_ext: [.json] 
 
   # ---- Active Directory / internal ---------------------------------
   - name: internalallthethings

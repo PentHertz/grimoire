@@ -7,7 +7,6 @@ model (data) and the view (HTML), and apply the transport-level security
 controls (CSP headers, nosniff, the CSRF guard on the update endpoint).
 """
 import argparse
-import html
 import json
 import subprocess
 import sys
@@ -15,7 +14,7 @@ import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import config, model, view
+from . import config, model, view, converters
 
 # Live state of a web-triggered update (fetch + reindex), shared across requests.
 UPDATE = {"running": False, "log": [], "rc": None}
@@ -116,27 +115,12 @@ def make_handler():
                 # document types only - never .git/config, .env, keys, source files
                 self._send(404, "doc not found", "text/plain")
                 return
-            # PDFs (books, OSINT guides): parse the text with pdftotext and render
-            # it as readable content (the in-iframe <embed> plugin is unreliable
-            # under our strict CSP). A link still opens the original for figures.
-            if f.suffix.lower() == ".pdf":
-                qp = (f"src={urllib.parse.quote(src)}&path={urllib.parse.quote(path)}")
-                dl = (f'<p class="pdfdl"><a href="/asset?{qp}" target="_blank" '
-                      f'rel="noopener">open original PDF (figures/images)</a></p>')
-                text = model._pdf_text(f)
-                if text.strip():
-                    body = dl + view._pdf_to_html(text)
-                else:
-                    import shutil
-                    why = ("no extractable text (scanned/image-only PDF)"
-                           if shutil.which("pdftotext")
-                           else "install poppler-utils (pdftotext) to extract PDF text")
-                    body = dl + f'<p class="pdfnote">PDF text unavailable: {why}.</p>'
-            elif f.suffix.lower() in (".yml", ".yaml"):
-                # _read_doc_text unicode-decodes YAML so escaped accents/dashes
-                # (e.g. machine-generated framework files) render as real chars
-                body = "<pre>" + html.escape(model._read_doc_text(f)) + "</pre>"
-            else:
+            
+            # Load all converters (built-in + custom)
+            converters.load_converters()
+            
+            body = converters.convert_html(f, src, path)
+            if body is None:
                 # .ipynb is converted to markdown inside _read_doc_text
                 body = view._rewrite_assets(
                     view._render_markdown(model._read_doc_text(f)), src, path)

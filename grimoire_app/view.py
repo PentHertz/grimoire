@@ -103,19 +103,6 @@ def _rewrite_assets(body: str, src: str, relpath: str) -> str:
     body = _re.sub(r'href="([^"]+)"', link, body)
     return body
 
-def _pdf_to_html(text: str) -> str:
-    """Format pdftotext output into readable, page-separated HTML. The text is
-    escaped (untrusted: it comes from third-party PDFs) and wrapped per page so
-    the doc viewer shows real content instead of an embedded binary."""
-    pages = text.split("\f")  # pdftotext separates pages with form-feed
-    parts = []
-    for i, pg in enumerate(pages, 1):
-        if not pg.strip():
-            continue
-        parts.append(f'<div class="pdfpage"><div class="pgno">page {i}</div>'
-                     f"<pre>{html.escape(pg.strip(chr(10)))}</pre></div>")
-    return "\n".join(parts) or "<p>(no extractable text on any page)</p>"
-
 
 # --------------------------------------------------------------------------- #
 # Search-result snippet
