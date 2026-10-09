@@ -316,6 +316,12 @@ sources:
     build: markdown
     docs_dir: GhidraDocs
     sparse: [GhidraDocs]   # huge repo; sparse-checkout only the docs
+  - name: rea
+    title: REA (Reverse Engineer Anything)
+    repo: https://github.com/morluto/rea
+    category: re-tools
+    build: markdown
+    sparse: ["/README.md", "/docs/**", "/skill-src/reverse-engineer-anything/**"]
   - name: radare2book
     title: radare2 book
     repo: https://github.com/radareorg/radare2book
