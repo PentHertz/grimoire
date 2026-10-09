@@ -160,9 +160,12 @@ MCP-DoS cases (`python3 -m unittest`), run in CI across Python 3.9-3.12.
 
 ## How it works
 
-- **fetch** shallow-clones each `sources.yaml` repo into `data/sources/<name>`,
-  sparse-checking-out only a source's `docs_dir` subtree when one is set - so a
-  huge tool repo never lands whole on disk. `.git` is kept by default so
+- **fetch** shallow-clones each `sources.yaml` repo into `data/sources/<name>`
+  (blobless + sparse), checking out only what Grimoire uses: a source's
+  `docs_dir` subtree when one is set, otherwise just its doc files (indexed
+  text, `index_ext`, images, PDFs) - so code, binaries and archives in a repo
+  never land on disk. mdbook/mkdocs sources are cloned whole because `build`
+  runs their native builder from the repo root. `.git` is kept by default so
   `update` can `git pull` incrementally; pass `--prune-git` (or set
   `GRIMOIRE_PRUNE_GIT=1`) to drop it and reclaim ~40% of each checkout (the doc
   viewer and the GitHub origin links don't need it), at the cost of re-cloning

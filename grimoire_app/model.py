@@ -72,17 +72,35 @@ def load_sources():
 _WARNED_NAMES = set()
 
 
+# Builders `build` actually runs; they need the whole repo root (book.toml,
+# mkdocs.yml, theme, ...), so these sources are not doc-filtered by default.
+NATIVE_BUILDS = {"mdbook", "mkdocs"}
+
+
+def _doc_patterns(s):
+    """Sparse globs keeping only what Grimoire uses: indexed text (incl. the
+    source's index_ext) plus the images/PDFs the doc viewer serves."""
+    exts = config.TEXT_EXT | config.ASSET_EXT | {e.lower() for e in s.get("index_ext", [])}
+    return sorted({f"*{e}" for e in exts} | {f"*{e.upper()}" for e in exts})
+
+
+def _is_glob_sparse(sparse) -> bool:
+    return any(any(c in p for c in "*?[") or p.startswith("!") for p in sparse)
+
+
 def _sparse_paths(s):
     """Which paths to sparse-checkout for a source: an explicit ``sparse:`` list
-    wins; otherwise a markdown source's ``docs_dir`` (so a huge tool repo is
-    scoped to just its docs subtree and never lands whole on disk); otherwise
-    None = clone the whole repo. Native-build sources are left un-scoped because
+    wins; otherwise its ``docs_dir`` subtree; otherwise only its doc files
+    (_doc_patterns) - so code, binaries and archives in a repo never land on disk.
+    None = clone the whole repo, kept only for native-build sources because
     their builder needs the repo root (book.toml / mkdocs.yml / etc.)."""
     if s.get("sparse"):
         return s["sparse"]
-    if s.get("docs_dir") and s.get("build", "markdown") == "markdown":
+    if s.get("build", "markdown") in NATIVE_BUILDS:
+        return None
+    if s.get("docs_dir"):
         return [s["docs_dir"]]
-    return None
+    return _doc_patterns(s)
 
 
 # --------------------------------------------------------------------------- #
@@ -120,25 +138,45 @@ def _prune_git(dest: Path):
     shutil.rmtree(dest / ".git", ignore_errors=True)
 
 
+def _sparse_set(dest: Path, sparse):
+    """Apply a sparse-checkout. Plain paths use cone mode (whole subtrees); glob
+    patterns such as ``*.md`` switch to --no-cone so a repo whose docs sit next to
+    huge binaries (e.g. CTF archives) can be narrowed to just its doc files."""
+    mode = ["--no-cone"] if _is_glob_sparse(sparse) else []
+    # `--` terminates options so a sparse path beginning with `-` can't be
+    # parsed as a flag (e.g. --no-cone) to sparse-checkout.
+    if subprocess.run(["git", "-C", str(dest), "sparse-checkout", "set", *mode, "--", *sparse],
+                      check=False).returncode != 0 and mode:
+        # git < 2.35 has no `set --no-cone`; there `init` defaults to non-cone
+        subprocess.run(["git", "-C", str(dest), "sparse-checkout", "init"], check=False)
+        subprocess.run(["git", "-C", str(dest), "sparse-checkout", "set", "--", *sparse],
+                       check=False)
+
+
 def _clone_repo(name, repo, dest, sparse) -> bool:
     """Shallow-clone repo into dest, sparse-checking-out only `sparse` paths when
     given (blobless). Returns True on a successful clone."""
     if sparse:
-        print(f"[+] {name}: sparse cloning {repo} (paths: {', '.join(sparse)})")
+        globs = _is_glob_sparse(sparse)
+        shown = ", ".join(sparse) if len(sparse) <= 4 else f"{len(sparse)} doc patterns"
+        print(f"[+] {name}: sparse cloning {repo} (paths: {shown})")
+        # Glob rules are applied before the first checkout (--no-checkout) so no
+        # blob outside them - e.g. a root-level binary - is ever downloaded.
         if subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none",
-                           "--sparse", repo, str(dest)], check=False).returncode != 0:
+                           "--no-checkout" if globs else "--sparse", repo, str(dest)],
+                          check=False).returncode != 0:
             return False
-        # `--` terminates options so a sparse path beginning with `-` can't be
-        # parsed as a flag (e.g. --no-cone) to sparse-checkout.
-        subprocess.run(["git", "-C", str(dest), "sparse-checkout", "set", "--", *sparse],
-                       check=False)
+        _sparse_set(dest, sparse)
+        if globs:
+            return subprocess.run(["git", "-C", str(dest), "checkout"],
+                                  check=False).returncode == 0
         return True
     print(f"[+] {name}: cloning {repo}")
     return subprocess.run(["git", "clone", "--depth", "1", repo, str(dest)],
                           check=False).returncode == 0
 
 
-def _fetch_org(name, org, dest, prune=False):
+def _fetch_org(name, org, dest, prune=False, sparse=None):
     dest.mkdir(parents=True, exist_ok=True)
     repos = _gh_org_repos(org)
     print(f"[+] {name}: org {org} -> {len(repos)} repos")
@@ -148,12 +186,13 @@ def _fetch_org(name, org, dest, prune=False):
             continue
         sub = dest / Path(url).stem
         if (sub / ".git").is_dir():
+            if sparse:
+                _sparse_set(sub, sparse)
             subprocess.run(["git", "-C", str(sub), "pull", "--ff-only"], check=False)
             continue
         if sub.exists():              # previously pruned (no .git): re-clone
             shutil.rmtree(sub, ignore_errors=True)
-        if subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none", url,
-                           str(sub)], check=False).returncode == 0 and prune:
+        if _clone_repo(f"{name}/{sub.name}", url, sub, sparse) and prune:
             _prune_git(sub)
 
 def _fetch_pdf(name, url, dest):
@@ -188,7 +227,7 @@ def cmd_fetch(args):
             continue
         dest = config.SRC_DIR / name
         if s.get("org"):
-            _fetch_org(name, s["org"], dest, prune)
+            _fetch_org(name, s["org"], dest, prune, _sparse_paths(s))
             continue
         if s.get("pdf_url"):
             _fetch_pdf(name, s["pdf_url"], dest)
@@ -200,14 +239,13 @@ def cmd_fetch(args):
         if not _safe_repo_url(repo):
             print(f"[!] {name}: unsafe repo URL scheme, skipping ({repo!r})")
             continue
-        sparse = _sparse_paths(s)  # explicit sparse, else a markdown docs_dir subtree
+        sparse = _sparse_paths(s)  # explicit sparse, else docs_dir, else doc files only
         if (dest / ".git").is_dir():
             # Live checkout: refresh in place; drop .git afterwards only if pruning
             # was requested (reclaims space from an existing keep-mode checkout).
             print(f"[~] {name}: updating")
             if sparse:
-                subprocess.run(["git", "-C", str(dest), "sparse-checkout", "set", "--", *sparse],
-                               check=False)
+                _sparse_set(dest, sparse)
             subprocess.run(["git", "-C", str(dest), "pull", "--ff-only"], check=False)
             if prune:
                 _prune_git(dest)

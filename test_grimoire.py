@@ -645,7 +645,47 @@ class TestFetchSafety(unittest.TestCase):
         self.assertEqual(model._sparse_paths(
             {"docs_dir": "doc", "sparse": ["x"], "build": "markdown"}), ["x"])
         self.assertIsNone(model._sparse_paths({"docs_dir": "docs", "build": "mkdocs"}))
-        self.assertIsNone(model._sparse_paths({"build": "markdown"}))
+        # never natively built, so jekyll/hugo are scoped like markdown
+        self.assertEqual(model._sparse_paths({"docs_dir": "docs", "build": "hugo"}), ["docs"])
+
+    def test_default_sparse_keeps_only_doc_files(self):
+        # Without sparse/docs_dir, only what Grimoire uses is checked out: indexed
+        # text (+ index_ext), images and PDFs - never code, binaries or archives.
+        pats = model._sparse_paths({"build": "markdown", "index_ext": [".TXT"]})
+        for keep in ("*.md", "*.MD", "*.yaml", "*.rst", "*.png", "*.JPG", "*.pdf", "*.txt"):
+            self.assertIn(keep, pats)
+        for drop in ("*.c", "*.py", "*.zip", "*.exe", "*.json"):
+            self.assertNotIn(drop, pats)
+        self.assertIsNone(model._sparse_paths({"build": "mdbook"}))  # builder needs the root
+
+    def test_sparse_globs_use_no_cone(self):
+        # Plain paths keep cone mode; glob patterns (e.g. the default doc-only
+        # *.md/*.png rules) need --no-cone, and `--` must
+        # still precede manifest-supplied paths so none can act as a flag.
+        from unittest import mock
+        calls = []
+        ok = types.SimpleNamespace(returncode=0)
+        with mock.patch.object(model.subprocess, "run", lambda argv, **kw: calls.append(argv) or ok):
+            model._sparse_set(self.tmp, ["docs"])
+            model._sparse_set(self.tmp, ["*.md", "*.txt"])
+        self.assertEqual(calls[0][-3:], ["set", "--", "docs"])
+        self.assertEqual(calls[1][-5:], ["set", "--no-cone", "--", "*.md", "*.txt"])
+
+    def test_glob_clone_applies_rules_before_checkout(self):
+        # Glob sparse clones use --no-checkout + an explicit checkout so blobs
+        # outside the rules (e.g. a root-level binary) are never downloaded.
+        from unittest import mock
+        calls = []
+        def run(argv, **kw):
+            calls.append(argv)
+            return types.SimpleNamespace(returncode=0)
+        with mock.patch.object(model.subprocess, "run", run):
+            self.assertTrue(model._clone_repo("x", "https://example.invalid/x",
+                                              self.tmp / "x", ["*.md"]))
+        self.assertIn("--no-checkout", calls[0])
+        self.assertIn("--filter=blob:none", calls[0])
+        self.assertEqual(calls[1][-3:], ["--no-cone", "--", "*.md"])
+        self.assertEqual(calls[-1][-1], "checkout")
 
     def test_unsafe_source_name_is_rejected(self):
         # A crafted manifest name must never let fetch clone/rmtree/prune OUTSIDE
