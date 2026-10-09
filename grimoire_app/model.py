@@ -72,11 +72,6 @@ def load_sources():
 _WARNED_NAMES = set()
 
 
-# Builders `build` actually runs; they need the whole repo root (book.toml,
-# mkdocs.yml, theme, ...), so these sources are not doc-filtered by default.
-NATIVE_BUILDS = {"mdbook", "mkdocs"}
-
-
 def _doc_patterns(s):
     """Sparse globs keeping only what Grimoire uses: indexed text (incl. the
     source's index_ext) plus the images/PDFs the doc viewer serves."""
@@ -92,12 +87,10 @@ def _sparse_paths(s):
     """Which paths to sparse-checkout for a source: an explicit ``sparse:`` list
     wins; otherwise its ``docs_dir`` subtree; otherwise only its doc files
     (_doc_patterns) - so code, binaries and archives in a repo never land on disk.
-    None = clone the whole repo, kept only for native-build sources because
-    their builder needs the repo root (book.toml / mkdocs.yml / etc.)."""
+    Native-build sources are scoped too: the optional `build` widens a checkout
+    to the full repo only when it actually runs mdbook/mkdocs."""
     if s.get("sparse"):
         return s["sparse"]
-    if s.get("build", "markdown") in NATIVE_BUILDS:
-        return None
     if s.get("docs_dir"):
         return [s["docs_dir"]]
     return _doc_patterns(s)
@@ -264,6 +257,17 @@ def _have(tool):
     return subprocess.run(["bash", "-lc", f"command -v {tool}"],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
+def _widen_for_build(name, src: Path):
+    """fetch checks out only doc files; a native builder also needs the repo's
+    config/theme/scripts, so materialise the full tree (blobs are fetched on
+    demand) right before building. The next fetch narrows it back to docs."""
+    if (src / ".git").is_dir():
+        subprocess.run(["git", "-C", str(src), "sparse-checkout", "disable"], check=False)
+    else:
+        print(f"[!] {name}: pruned checkout holds only doc files - native build may "
+              "fail; re-fetch without --prune-git to build it")
+
+
 def cmd_build(args):
     config.BUILD_DIR.mkdir(parents=True, exist_ok=True)
     for s in load_sources():
@@ -273,9 +277,11 @@ def cmd_build(args):
             continue
         out = config.BUILD_DIR / name
         if kind == "mdbook" and _have("mdbook"):
+            _widen_for_build(name, src)
             print(f"[+] {name}: mdbook build")
             subprocess.run(["mdbook", "build", "-d", str(out)], cwd=src, check=False)
         elif kind == "mkdocs" and _have("mkdocs"):
+            _widen_for_build(name, src)
             print(f"[+] {name}: mkdocs build")
             subprocess.run(["mkdocs", "build", "-d", str(out)], cwd=src, check=False)
         else:

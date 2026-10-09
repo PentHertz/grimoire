@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grimoire-docs"
-version = "1.1.1"
+version = "1.2.0"
 description = "Offline pentest documentation aggregator + unified search, with an MCP server to attach an AI model."
 readme = "README.md"
 requires-python = ">=3.9"

@@ -74,6 +74,11 @@ Curated in [`sources.yaml`](sources.yaml), grouped by category:
 | `web-api` | OWASP WSTG, Cheat Sheet Series, ASVS, API Security Top 10 |
 | `lotl` | GTFOBins, LOLBAS, GTFOArgs, LOLDrivers, LOOBins, WADComs |
 | `re-books` | mytechnotalent/Reverse-Engineering, Nightmare, how2heap (drop a PDF book in `custom/` to add one) |
+| `exploit-dev` | pwn-notes, Heap Exploitation, RPISEC MBE, Trail of Bits CTF Field Guide, pwntools tutorial |
+| `exploit-tools` | pwndbg docs, GEF docs |
+| `kernel-exploitation` | xairy Linux kernel exploitation, Windows kernel resources, Kernel Exploit Dojo |
+| `vuln-research` | Project Zero 0days in the Wild, Project Zero p0tools, Awesome Vulnerability Research |
+| `fuzzing` | Google fuzzing docs, AFL++ docs, syzkaller docs |
 | `re-tools` | radare2book, rizin book, angr docs, Ghidra (in-tree docs) |
 | `re-indexes` | Awesome-Reversing (ReversingID + tylerha97), reverse-engineering (wtsxDev), Awesome Malware Analysis, Awesome Android RE |
 | `firmware` | Awesome Firmware Security |
@@ -164,8 +169,8 @@ MCP-DoS cases (`python3 -m unittest`), run in CI across Python 3.9-3.12.
   (blobless + sparse), checking out only what Grimoire uses: a source's
   `docs_dir` subtree when one is set, otherwise just its doc files (indexed
   text, `index_ext`, images, PDFs) - so code, binaries and archives in a repo
-  never land on disk. mdbook/mkdocs sources are cloned whole because `build`
-  runs their native builder from the repo root. `.git` is kept by default so
+  never land on disk. The optional `build` widens an mdbook/mkdocs checkout to
+  the full repo only when it runs that native builder. `.git` is kept by default so
   `update` can `git pull` incrementally; pass `--prune-git` (or set
   `GRIMOIRE_PRUNE_GIT=1`) to drop it and reclaim ~40% of each checkout (the doc
   viewer and the GitHub origin links don't need it), at the cost of re-cloning

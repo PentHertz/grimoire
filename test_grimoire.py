@@ -279,6 +279,8 @@ class TestServer(unittest.TestCase):
                 {"cell_type": "markdown", "source": ["# Glitch NB\n", "nbmagicword\n"]},
                 {"cell_type": "code", "source": ["fault_inject()\n"], "outputs": []},
             ]}))
+        # RPISEC MBE-style lab notes use a .readme suffix, not .md.
+        (src / "lab6B.readme").write_text("# MBE lab\nret2libc readmetoken")
         (src / "pics" / "a.png").write_bytes(PNG)
         (src / "secret.env").write_text("API_KEY=supersecret")     # must NOT be servable
         try:
@@ -289,7 +291,7 @@ class TestServer(unittest.TestCase):
         config.SOURCES_FILE.write_text(
             "sources:\n"
             f"  - {{name: loc, title: Loc, type: local, path: {src}, "
-            "category: web-api, index_ext: [.ipynb]}\n")
+            "category: web-api, index_ext: [.ipynb, .readme]}\n")
         model.cmd_index(types.SimpleNamespace(force=True))
 
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), controller.make_handler())
@@ -367,6 +369,15 @@ class TestServer(unittest.TestCase):
         self.assertIn("/asset?src=loc&path=pics/a.png", text)   # img rewritten to /asset
         self.assertIn('href="https://x.test/"', text)           # external link preserved
         self.assertNotIn(".. image::", text)                    # rendered, not raw RST
+
+    def test_readme_extension_indexed_and_fetchable(self):
+        # Extra index extensions must also be safe to retrieve through /doc/MCP.
+        _, body, _ = self._get("/api/search?q=readmetoken")
+        hits = json.loads(body.decode())
+        self.assertTrue(any(h["path"] == "lab6B.readme" for h in hits))
+        self.assertIn("ret2libc readmetoken", model.doc_text("loc", "lab6B.readme"))
+        _, doc, _ = self._get("/doc?src=loc&path=lab6B.readme")
+        self.assertIn("ret2libc readmetoken", doc.decode())
 
     def test_yaml_doc_renders_decoded_unicode(self):
         # a framework-style YAML with escaped unicode must display as real chars
@@ -616,12 +627,14 @@ class TestFetchSafety(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="grimoire-fetch-"))
         self._orig_src, self._orig_prune = config.SRC_DIR, config.PRUNE_GIT
+        self._orig_sources = config.SOURCES_FILE
         config.SRC_DIR = self.tmp / "sources"
         config.SRC_DIR.mkdir(parents=True)
 
     def tearDown(self):
         import shutil
         config.SRC_DIR, config.PRUNE_GIT = self._orig_src, self._orig_prune
+        config.SOURCES_FILE = self._orig_sources
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_prune_git_removes_only_dotgit(self):
@@ -644,9 +657,8 @@ class TestFetchSafety(unittest.TestCase):
         # explicit sparse wins; native-build sources are left un-scoped (need root)
         self.assertEqual(model._sparse_paths(
             {"docs_dir": "doc", "sparse": ["x"], "build": "markdown"}), ["x"])
-        self.assertIsNone(model._sparse_paths({"docs_dir": "docs", "build": "mkdocs"}))
-        # never natively built, so jekyll/hugo are scoped like markdown
-        self.assertEqual(model._sparse_paths({"docs_dir": "docs", "build": "hugo"}), ["docs"])
+        # native-build sources are scoped too (`build` widens them on demand)
+        self.assertEqual(model._sparse_paths({"docs_dir": "docs", "build": "mkdocs"}), ["docs"])
 
     def test_default_sparse_keeps_only_doc_files(self):
         # Without sparse/docs_dir, only what Grimoire uses is checked out: indexed
@@ -656,7 +668,27 @@ class TestFetchSafety(unittest.TestCase):
             self.assertIn(keep, pats)
         for drop in ("*.c", "*.py", "*.zip", "*.exe", "*.json"):
             self.assertNotIn(drop, pats)
-        self.assertIsNone(model._sparse_paths({"build": "mdbook"}))  # builder needs the root
+        self.assertEqual(model._sparse_paths({"build": "mdbook"}),
+                         model._sparse_paths({"build": "markdown"}))
+
+    def test_build_widens_sparse_checkout_first(self):
+        # A doc-only checkout lacks book.toml themes/scripts: `build` must disable
+        # sparse-checkout before running the native builder, and never otherwise.
+        from unittest import mock
+        (config.SRC_DIR / "bk" / ".git").mkdir(parents=True)
+        (config.SRC_DIR / "md").mkdir()
+        config.SOURCES_FILE = self.tmp / "sources.yaml"
+        config.SOURCES_FILE.write_text(
+            "sources:\n  - {name: bk, repo: 'https://example.invalid/bk', build: mdbook}\n"
+            "  - {name: md, repo: 'https://example.invalid/md', build: markdown}\n")
+        calls = []
+        with mock.patch.object(model, "_have", lambda b: True), \
+             mock.patch.object(model.subprocess, "run", lambda argv, **kw: calls.append(argv)), \
+             mock.patch.object(config, "BUILD_DIR", self.tmp / "build"):
+            model.cmd_build(types.SimpleNamespace())
+        self.assertEqual(calls[0][-2:], ["sparse-checkout", "disable"])
+        self.assertEqual(calls[1][0], "mdbook")
+        self.assertEqual(len(calls), 2)   # the markdown source is not touched
 
     def test_sparse_globs_use_no_cone(self):
         # Plain paths keep cone mode; glob patterns (e.g. the default doc-only

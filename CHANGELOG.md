@@ -5,6 +5,50 @@ All notable changes to Grimoire are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-10-09
+
+### Added
+- **Low-level exploitation corpus** (15 sources, from #9 by @HACKE-RC) in five
+  new categories:
+  - `exploit-dev`: pwn-notes, Heap Exploitation, RPISEC MBE, Trail of Bits CTF
+    Field Guide, pwntools tutorial
+  - `exploit-tools`: pwndbg docs, GEF docs
+  - `kernel-exploitation`: xairy Linux kernel exploitation, Windows kernel
+    resources (sam-b)
+  - `vuln-research`: Project Zero 0days in the Wild, Project Zero p0tools,
+    Awesome Vulnerability Research
+  - `fuzzing`: Google fuzzing docs, AFL++ docs, syzkaller docs
+- **Source: Kernel Exploit Dojo** (`mito753`, #10) under `kernel-exploitation` -
+  200+ Linux kernel CTF challenges; writeups and commented exploits (`.txt`)
+  are indexed, while the ~2 GB of challenge archives are never downloaded.
+- **Glob patterns in `sparse:`** (e.g. `['*.md', '*.txt']`) - they use a
+  non-cone sparse-checkout, so a source can keep just matching files instead of
+  whole subtrees.
+- **`.readme` docs are viewable** in the doc viewer and `grimoire_fetch_doc`
+  (RPISEC MBE lab notes), not just searchable (#9).
+
+### Changed
+- **Doc-only fetch by default.** Every git source is now cloned blobless and
+  sparse, keeping only what Grimoire uses: its `docs_dir` subtree when set,
+  otherwise just its doc files (indexed text + `index_ext`, images, PDFs). The
+  rules apply before the first checkout, so code, binaries and archives are
+  never downloaded. Across the 139 git sources, a full fetch drops from
+  ~4.1 GB to ~2.1 GB, non-doc content from ~1.9 GB to ~5 MB, and whole-repo
+  clones from 123 to 0; the indexed text is unchanged.
+- `docs_dir` now scopes the checkout for every build type (previously markdown
+  only), and `org:` sources clone each repo with the same doc-only rules.
+- The optional **`build`** widens an mdbook/mkdocs checkout to the full repo
+  (`git sparse-checkout disable`, blobs fetched on demand) right before running
+  the native builder; the next `fetch` narrows it back. A `--prune-git`
+  checkout can't be widened, so `build` prints a hint to re-fetch.
+- Non-indexed `.json` / `.txt` / `.csv` / `.ipynb` files are no longer fetched
+  unless listed in the source's `index_ext`.
+- **Upgrading:** an existing checkout is narrowed to doc files on the next
+  `fetch`, but its old `.git` objects remain; run `grimoire clean --sources`
+  then `grimoire fetch` (or use `--prune-git`) to reclaim the space.
+- `README.md` source table lists the new categories and sources.
+- Version `1.1.1` -> `1.2.0` (package + MCP `serverInfo`).
+
 ## [1.1.1] - 2026-07-01
 
 ### Added
@@ -75,6 +119,7 @@ mdBook/mkdocs builds; an MCP server (`mcp`) with read / assist / auto modes and
 a gated command runner; and a security test suite (SQLi, XSS, SSTI, CSRF,
 path-traversal).
 
+[1.2.0]: https://github.com/PentHertz/grimoire/releases/tag/v1.2.0
 [1.1.1]: https://github.com/PentHertz/grimoire/releases/tag/v1.1.1
 [1.1.0]: https://github.com/PentHertz/grimoire/releases/tag/v1.1.0
 [1.0.0]: https://github.com/PentHertz/grimoire/releases/tag/v1.0.0

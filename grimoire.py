@@ -12,6 +12,7 @@ single full-text search index, and serves a web UI: type "ssrf", "xss", "sql",
 Subcommands:
   fetch   git clone/pull every source in sources.yaml into data/sources/
   build   (optional) run each source's native builder (mdbook/mkdocs) -> data/build/
+          (widens that source's doc-only checkout to the full repo first)
   index   (re)build the unified SQLite FTS5 search index from markdown/yaml
   serve   start the web search interface (http://127.0.0.1:8000 by default)
   all     fetch + index   (the usual one-shot)

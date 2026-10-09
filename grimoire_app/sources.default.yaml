@@ -10,13 +10,13 @@
 #   repo      : git URL (omit for type: local)
 #   category  : grouping shown/filtered in the UI
 #   build     : native build system (mdbook|mkdocs|jekyll|hugo|markdown)
-#   docs_dir  : (optional) subdir to index/build; default = whole repo. For
-#               non-mdbook/mkdocs sources it also scopes the git checkout (sparse)
-#               so only that subtree is downloaded - set `sparse:` to override.
+#   docs_dir  : (optional) subdir to index/build; default = whole repo. It also
+#               scopes the git checkout (sparse) so only that subtree is
+#               downloaded - set `sparse:` to override.
 #   sparse    : (optional) list of paths to sparse-checkout; glob patterns (e.g.
-#               ['*.md']) keep only matching files. Default for non-mdbook/mkdocs
-#               sources without docs_dir: only doc files (text, index_ext,
-#               images, PDFs) are downloaded - code/binaries/archives are skipped
+#               ['*.md']) keep only matching files. Default without docs_dir:
+#               only doc files (text, index_ext, images, PDFs) are downloaded -
+#               code/binaries/archives are skipped (`build` widens on demand)
 #   org       : (optional) GitHub org/user - clones every public repo
 #   pdf_url   : (optional) direct PDF URL to download and index (needs pdftotext)
 #   index_ext : (optional) extra file extensions to index, e.g. [.json] [.ipynb]
