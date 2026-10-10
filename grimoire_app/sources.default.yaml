@@ -321,7 +321,7 @@ sources:
     repo: https://github.com/morluto/rea
     category: re-tools
     build: markdown
-    sparse: ["/README.md", "/docs/**", "/skill-src/reverse-engineer-anything/**"]
+    sparse: ["/README.md", "/docs/**", "/.agents/skills/reverse-engineer-anything/**"]
   - name: radare2book
     title: radare2 book
     repo: https://github.com/radareorg/radare2book
