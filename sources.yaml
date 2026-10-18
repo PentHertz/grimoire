@@ -325,6 +325,21 @@ sources:
     build: markdown
     docs_dir: GhidraDocs
     sparse: [GhidraDocs]   # huge repo; sparse-checkout only the docs
+  - name: rea
+    title: REA (Reverse Engineer Anything)
+    repo: https://github.com/morluto/rea
+    category: re-tools
+    build: markdown
+    # Top-level guides + the agent skill only: skips docs/ subdirs (20 README
+    # translations, verification logs, specs) and REA's own setup/MCP/process pages.
+    sparse: ["/README.md", "/docs/*.md",
+             "!/docs/index.md", "!/docs/installation.md", "!/docs/client-*.md",
+             "!/docs/mcp-*.md", "!/docs/tool-design.md", "!/docs/testing.md",
+             "!/docs/releasing.md", "!/docs/roadmap.md", "!/docs/migration-*.md",
+             "!/docs/reconstruction-*.md", "!/docs/browser-scenario-contract.md",
+             "!/docs/http3-capture-lab.md", "!/docs/windows-ghidra-p0.md",
+             "/.agents/skills/reverse-engineer-anything/**",
+             "!/.agents/skills/reverse-engineer-anything/references/connection-and-recovery.md"]
   - name: radare2book
     title: radare2 book
     repo: https://github.com/radareorg/radare2book
